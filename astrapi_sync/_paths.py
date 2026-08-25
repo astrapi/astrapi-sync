@@ -1,6 +1,8 @@
 # astrapi_sync/_paths.py
 from pathlib import Path
 
+from fastapi import HTTPException
+
 from astrapi_core.system.paths import db_path, log_dir, work_dir  # noqa: F401 – re-export
 
 
@@ -32,6 +34,20 @@ def folder_base(storage_location: str) -> Path:
     if storage_location:
         return Path(storage_location).resolve() / "astrapi-sync"
     return work_dir().resolve() / "folders"
+
+
+def resolve_within(root: Path, rel_path: str) -> Path:
+    """Löst rel_path sicher innerhalb von root auf, wirft 400 bei Path-Traversal.
+
+    Vergleicht die echte Path.parents-Hierarchie statt eines String-Präfix
+    (der z.B. Ordner "1" und "18" verwechseln würde, da ".../18" textuell
+    mit ".../1" beginnt -- siehe T-213-SYNC).
+    """
+    root = root.resolve()
+    target = (root / rel_path).resolve()
+    if target != root and root not in target.parents:
+        raise HTTPException(400, "Ungültiger Pfad")
+    return target
 
 
 def folder_path(folder_id) -> Path:
