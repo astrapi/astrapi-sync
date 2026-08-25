@@ -130,18 +130,10 @@ def get_index(folder_id: str, device=Depends(require_device)):
 
 
 def _resolve_file_path(folder_id: str, rel_path: str) -> PPath:
-    """Löst einen relativen Client-Pfad sicher innerhalb des Sync-Ordners auf.
+    """Löst einen relativen Client-Pfad sicher innerhalb des Sync-Ordners auf."""
+    from astrapi_sync._paths import folder_path, resolve_within
 
-    Verhindert Path-Traversal (z.B. "../../etc/passwd") -- der aufgelöste
-    Pfad muss innerhalb von folder_path(folder_id) liegen.
-    """
-    from astrapi_sync._paths import folder_path
-
-    root = folder_path(folder_id).resolve()
-    target = (root / rel_path).resolve()
-    if target != root and root not in target.parents:
-        raise HTTPException(400, "Ungültiger Pfad")
-    return target
+    return resolve_within(folder_path(folder_id), rel_path)
 
 
 # ── Download (Phase 2) ───────────────────────────────────────────────────────
