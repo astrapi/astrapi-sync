@@ -141,9 +141,15 @@ def _resolve_file_path(folder_id: str, rel_path: str) -> PPath:
 
 @router.get("/folders/{folder_id}/files/{rel_path:path}")
 def download_file(folder_id: str, rel_path: str, device=Depends(require_device)):
-    target = _resolve_file_path(folder_id, rel_path)
-    if not target.is_file():
-        raise HTTPException(404, "Datei nicht gefunden")
+    from astrapi_sync._paths import folder_lock
+
+    # Lock nur um Pfadauflösung + Existenz-Check -- das eigentliche
+    # Streamen der Antwort passiert danach außerhalb, siehe T-219-SYNC
+    # (dort auch die Einschränkung dazu dokumentiert).
+    with folder_lock(folder_id):
+        target = _resolve_file_path(folder_id, rel_path)
+        if not target.is_file():
+            raise HTTPException(404, "Datei nicht gefunden")
     return FileResponse(str(target))
 
 
@@ -175,57 +181,64 @@ async def upload_file(
     except json.JSONDecodeError:
         raise HTTPException(400, "meta ist kein gültiges JSON")
 
-    target = _resolve_file_path(folder_id, rel_path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-
     block_size = int(info.get("block_size") or DEFAULT_BLOCK_SIZE)
     blocks: list[str] = info.get("blocks") or []
     changed: list[int] = info.get("changed") or []
     size = int(info.get("size") or 0)
-
-    # Konflikt-Erkennung: Client kennt den Server-Hash, den er zuletzt
-    # gesehen hat (leer bei neuer Datei). Weicht der TATSÄCHLICHE
-    # aktuelle Server-Stand davon ab, hat sich die Datei serverseitig seit
-    # dem letzten bekannten Sync-Stand des Clients geändert -- echter
-    # Konflikt, kein einfaches "neuer gewinnt". Client muss die Kopie
-    # selbst als *.syncconflict sichern und erneut versuchen.
     expected = info.get("expected_server_sha256")
-    if target.is_file():
-        current_hash = whole_file_hash(target)
-        if expected is not None and current_hash != expected:
-            raise HTTPException(
-                409,
-                "Konflikt: Datei wurde serverseitig seit dem letzten bekannten Stand geändert",
-            )
 
+    # Upload-Payload VOR dem Lock einlesen -- das Warten auf Netzwerk-Bytes
+    # soll den Ordner nicht fuer andere Requests blockieren.
     changed_bytes = await data.read() if data is not None else b""
-    offsets = {idx: pos for pos, idx in enumerate(sorted(changed))}
 
-    # Bestehenden Inhalt (falls vorhanden) als Basis nehmen, unveränderte
-    # Bereiche bleiben unangetastet -- nur die geänderten Blockpositionen
-    # werden überschrieben.
-    existing = target.read_bytes() if target.is_file() else b""
-    buf = bytearray(existing)
-    if len(buf) < size:
-        buf.extend(b"\x00" * (size - len(buf)))
+    from astrapi_sync._paths import folder_lock
 
-    for idx in sorted(changed):
-        start = idx * block_size
-        end = min(start + block_size, size)
-        chunk_start = offsets[idx] * block_size
-        chunk = changed_bytes[chunk_start : chunk_start + (end - start)]
-        buf[start:end] = chunk
+    with folder_lock(folder_id):
+        target = _resolve_file_path(folder_id, rel_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
 
-    del buf[size:]
-    target.write_bytes(bytes(buf))
+        # Konflikt-Erkennung: Client kennt den Server-Hash, den er zuletzt
+        # gesehen hat (leer bei neuer Datei). Weicht der TATSÄCHLICHE
+        # aktuelle Server-Stand davon ab, hat sich die Datei serverseitig
+        # seit dem letzten bekannten Sync-Stand des Clients geändert --
+        # echter Konflikt, kein einfaches "neuer gewinnt". Client muss die
+        # Kopie selbst als *.syncconflict sichern und erneut versuchen.
+        if target.is_file():
+            current_hash = whole_file_hash(target)
+            if expected is not None and current_hash != expected:
+                raise HTTPException(
+                    409,
+                    "Konflikt: Datei wurde serverseitig seit dem letzten bekannten Stand geändert",
+                )
 
-    mtime = info.get("mtime")
-    if mtime is not None:
-        import os
+        offsets = {idx: pos for pos, idx in enumerate(sorted(changed))}
 
-        os.utime(target, (mtime, mtime))
+        # Bestehenden Inhalt (falls vorhanden) als Basis nehmen, unveränderte
+        # Bereiche bleiben unangetastet -- nur die geänderten Blockpositionen
+        # werden überschrieben.
+        existing = target.read_bytes() if target.is_file() else b""
+        buf = bytearray(existing)
+        if len(buf) < size:
+            buf.extend(b"\x00" * (size - len(buf)))
 
-    new_hash = whole_file_hash(target)
+        for idx in sorted(changed):
+            start = idx * block_size
+            end = min(start + block_size, size)
+            chunk_start = offsets[idx] * block_size
+            chunk = changed_bytes[chunk_start : chunk_start + (end - start)]
+            buf[start:end] = chunk
+
+        del buf[size:]
+        target.write_bytes(bytes(buf))
+
+        mtime = info.get("mtime")
+        if mtime is not None:
+            import os
+
+            os.utime(target, (mtime, mtime))
+
+        new_hash = whole_file_hash(target)
+
     await manager.broadcast(folder_id, {"event": "changed", "path": rel_path})
     return {"status": "ok", "sha256": new_hash}
 
@@ -235,9 +248,12 @@ async def upload_file(
 
 @router.delete("/folders/{folder_id}/files/{rel_path:path}")
 async def delete_file(folder_id: str, rel_path: str, device=Depends(require_device)):
-    target = _resolve_file_path(folder_id, rel_path)
-    if target.is_file():
-        target.unlink()
+    from astrapi_sync._paths import folder_lock
+
+    with folder_lock(folder_id):
+        target = _resolve_file_path(folder_id, rel_path)
+        if target.is_file():
+            target.unlink()
     await manager.broadcast(folder_id, {"event": "deleted", "path": rel_path})
     return {"status": "ok"}
 
@@ -251,27 +267,33 @@ async def delete_file(folder_id: str, rel_path: str, device=Depends(require_devi
 
 @router.post("/folders/{folder_id}/dirs/{rel_path:path}")
 async def create_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
-    target = _resolve_file_path(folder_id, rel_path)
-    target.mkdir(parents=True, exist_ok=True)
+    from astrapi_sync._paths import folder_lock
+
+    with folder_lock(folder_id):
+        target = _resolve_file_path(folder_id, rel_path)
+        target.mkdir(parents=True, exist_ok=True)
     await manager.broadcast(folder_id, {"event": "dir_created", "path": rel_path})
     return {"status": "ok"}
 
 
 @router.delete("/folders/{folder_id}/dirs/{rel_path:path}")
 async def delete_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
-    target = _resolve_file_path(folder_id, rel_path)
+    from astrapi_sync._paths import folder_lock
+
     deleted = False
-    if target.is_dir():
-        try:
-            target.rmdir()
-            deleted = True
-        except OSError:
-            # nicht (mehr) leer -- z.B. zwischenzeitlich im selben Lauf
-            # eine Datei hineingelegt; niemals rekursiv löschen. Client
-            # bekommt deleted=False zurück und weiß so, dass hier
-            # tatsächlich nichts entfernt wurde (kein Fantom-Löschen im
-            # Ergebnis-Report).
-            pass
+    with folder_lock(folder_id):
+        target = _resolve_file_path(folder_id, rel_path)
+        if target.is_dir():
+            try:
+                target.rmdir()
+                deleted = True
+            except OSError:
+                # nicht (mehr) leer -- z.B. zwischenzeitlich im selben Lauf
+                # eine Datei hineingelegt; niemals rekursiv löschen. Client
+                # bekommt deleted=False zurück und weiß so, dass hier
+                # tatsächlich nichts entfernt wurde (kein Fantom-Löschen im
+                # Ergebnis-Report).
+                pass
     if deleted:
         await manager.broadcast(folder_id, {"event": "dir_deleted", "path": rel_path})
     return {"status": "ok", "deleted": deleted}
