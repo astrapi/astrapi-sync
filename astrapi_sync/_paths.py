@@ -1,9 +1,28 @@
 # astrapi_sync/_paths.py
+import threading
 from pathlib import Path
 
 from fastapi import HTTPException
 
 from astrapi_core.system.paths import db_path, log_dir, work_dir  # noqa: F401 – re-export
+
+_folder_locks: dict[str, threading.Lock] = {}
+_folder_locks_guard = threading.Lock()
+
+
+def folder_lock(folder_id) -> threading.Lock:
+    """Ein Lock pro Sync-Ordner -- serialisiert Dateisystem-Operationen auf
+    demselben Ordner (Sync-API-Endpunkte, Speicherort-Verschieben).
+
+    threading.Lock statt asyncio.Lock, da sowohl synchrone (im Threadpool
+    laufende) als auch async-def-Endpunkte denselben Lock nutzen müssen --
+    ein asyncio.Lock wäre aus einem synchronen def-Endpunkt heraus nicht
+    sauber nutzbar. Ein-Prozess-Deployment (siehe ws_manager.py), kein
+    Multi-Worker -- ein simpler In-Memory-Dict reicht (T-219-SYNC).
+    """
+    folder_id = str(folder_id)
+    with _folder_locks_guard:
+        return _folder_locks.setdefault(folder_id, threading.Lock())
 
 
 def package_dir() -> Path:
