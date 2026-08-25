@@ -39,6 +39,8 @@ class PairRequest(BaseModel):
 
 @router.post("/pair")
 def pair(payload: PairRequest):
+    from astrapi_core.system.activity_log import log_activity
+
     from astrapi_sync.modules.devices.pairing_store import redeem_pairing_token
     from astrapi_sync.modules.devices.ui.crud import store as devices_store
     from astrapi_sync.modules.folders.ui.crud import folders_for_select
@@ -57,6 +59,13 @@ def pair(payload: PairRequest):
         if existing is None:
             raise HTTPException(404, "Gerät wurde inzwischen gelöscht")
         devices_store.update(existing_device_id, {"token_hash": hash_token(device_token)})
+        log_activity(
+            log_type="job",
+            module="devices",
+            item_id=str(existing_device_id),
+            description=f"Gerät „{existing.get('description') or existing_device_id}“ neu verbunden",
+            status="ok",
+        )
         return {
             "device_id": existing_device_id,
             "device_token": device_token,
@@ -75,6 +84,13 @@ def pair(payload: PairRequest):
             "last_seen": "",
             "enabled": True,
         },
+    )
+    log_activity(
+        log_type="job",
+        module="devices",
+        item_id=str(item_id),
+        description=f"Neues Gerät „{payload.description or 'Neues Gerät'}“ gepairt",
+        status="ok",
     )
 
     return {
@@ -267,6 +283,54 @@ async def delete_dir(folder_id: str, rel_path: str, device=Depends(require_devic
     if deleted:
         await manager.broadcast(folder_id, {"event": "dir_deleted", "path": rel_path})
     return {"status": "ok", "deleted": deleted}
+
+
+# ── Sync-Zusammenfassung fürs Activity Log ──────────────────────────────────
+# Der Server sieht nur einzelne Datei-/Verzeichnis-Requests, kein Konzept
+# von "ein Sync-Lauf" -- das kennt nur der Client (sync_folder_once()).
+# Der Client meldet daher explizit einmal pro Lauf eine Zusammenfassung,
+# statt dass der Server versucht, Lauf-Grenzen aus Request-Timing zu raten.
+
+
+class SyncSummary(BaseModel):
+    uploaded: int = 0
+    downloaded: int = 0
+    deleted_local: int = 0
+    deleted_remote: int = 0
+    conflicts: int = 0
+
+
+@router.post("/folders/{folder_id}/sync-log")
+def log_sync_summary(folder_id: str, summary: SyncSummary, device=Depends(require_device)):
+    from astrapi_core.system.activity_log import log_activity
+
+    device_id, dev = device
+    total = summary.uploaded + summary.downloaded + summary.deleted_local + summary.deleted_remote
+    if total == 0:
+        return {"status": "ok", "logged": False}
+
+    parts = []
+    if summary.uploaded:
+        parts.append(f"{summary.uploaded} hochgeladen")
+    if summary.downloaded:
+        parts.append(f"{summary.downloaded} heruntergeladen")
+    deleted = summary.deleted_local + summary.deleted_remote
+    if deleted:
+        parts.append(f"{deleted} gelöscht")
+    if summary.conflicts:
+        parts.append(f"{summary.conflicts} Konflikt(e)")
+
+    device_label = dev.get("description") or device_id
+    log_activity(
+        log_type="job",
+        module="folders",
+        item_id=folder_id,
+        description=f"Sync von „{device_label}“: " + ", ".join(parts),
+        status="warning" if summary.conflicts else "ok",
+        items_count=total,
+        metadata={"device_id": device_id, "device": device_label, **summary.model_dump()},
+    )
+    return {"status": "ok", "logged": True}
 
 
 # ── WebSocket-Push (Phase 3) ─────────────────────────────────────────────────
