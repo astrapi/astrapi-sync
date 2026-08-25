@@ -56,3 +56,18 @@ def build_index(root: Path, block_size: int = DEFAULT_BLOCK_SIZE) -> list[dict]:
             continue
         entries.append(file_entry(p, p.relative_to(root).as_posix(), block_size))
     return entries
+
+
+def build_dir_index(root: Path) -> list[str]:
+    """Relative Pfade aller (rekursiv) leeren Verzeichnisse.
+
+    Ein Verzeichnis, das irgendwo in seinem Baum eine Datei enthält, wird
+    schon implizit durch deren Pfad mitsynchronisiert (upload_file() legt
+    fehlende Elternverzeichnisse an) -- nur komplett leere Verzeichnisse
+    tauchen sonst nirgends im Index auf und würden nie propagiert.
+    """
+    dirs = []
+    for p in sorted(root.rglob("*")):
+        if p.is_dir() and not any(f.is_file() for f in p.rglob("*")):
+            dirs.append(p.relative_to(root).as_posix())
+    return dirs

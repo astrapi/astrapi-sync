@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from astrapi_sync.api.auth import authenticate, hash_token, require_device, require_device_only
-from astrapi_sync.api.block_hash import DEFAULT_BLOCK_SIZE, build_index, whole_file_hash
+from astrapi_sync.api.block_hash import DEFAULT_BLOCK_SIZE, build_dir_index, build_index, whole_file_hash
 from astrapi_sync.api.ws_manager import manager
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -110,7 +110,7 @@ def get_index(folder_id: str, device=Depends(require_device)):
     from astrapi_sync._paths import folder_path
 
     root = folder_path(folder_id)
-    return {"files": build_index(root)}
+    return {"files": build_index(root), "dirs": build_dir_index(root)}
 
 
 def _resolve_file_path(folder_id: str, rel_path: str) -> PPath:
@@ -232,6 +232,41 @@ async def delete_file(folder_id: str, rel_path: str, device=Depends(require_devi
         target.unlink()
     await manager.broadcast(folder_id, {"event": "deleted", "path": rel_path})
     return {"status": "ok"}
+
+
+# ── Leere Verzeichnisse (Phase 2) ────────────────────────────────────────────
+# Nicht-leere Verzeichnisse werden implizit über Datei-Pfade angelegt
+# (upload_file() macht target.parent.mkdir(parents=True)) -- diese beiden
+# Routen decken nur den Fall ab, dass ein Verzeichnis GAR KEINE Datei
+# enthält und sonst nie im Index auftauchen würde.
+
+
+@router.post("/folders/{folder_id}/dirs/{rel_path:path}")
+async def create_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
+    target = _resolve_file_path(folder_id, rel_path)
+    target.mkdir(parents=True, exist_ok=True)
+    await manager.broadcast(folder_id, {"event": "dir_created", "path": rel_path})
+    return {"status": "ok"}
+
+
+@router.delete("/folders/{folder_id}/dirs/{rel_path:path}")
+async def delete_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
+    target = _resolve_file_path(folder_id, rel_path)
+    deleted = False
+    if target.is_dir():
+        try:
+            target.rmdir()
+            deleted = True
+        except OSError:
+            # nicht (mehr) leer -- z.B. zwischenzeitlich im selben Lauf
+            # eine Datei hineingelegt; niemals rekursiv löschen. Client
+            # bekommt deleted=False zurück und weiß so, dass hier
+            # tatsächlich nichts entfernt wurde (kein Fantom-Löschen im
+            # Ergebnis-Report).
+            pass
+    if deleted:
+        await manager.broadcast(folder_id, {"event": "dir_deleted", "path": rel_path})
+    return {"status": "ok", "deleted": deleted}
 
 
 # ── WebSocket-Push (Phase 3) ─────────────────────────────────────────────────
