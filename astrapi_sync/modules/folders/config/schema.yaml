@@ -10,8 +10,9 @@ fields:
     colspan: 2
 
   - name: storage_location
-    type: info
+    type: select
     label: Speicherort
+    options_endpoint: /api/folders/storage-locations
     column: 1
     row: 2
     colspan: 2
