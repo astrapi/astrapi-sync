@@ -1,3 +1,8 @@
 version:      0.0.1
 name:         astrapi-sync
 display_name: Sync
+
+# Sync läuft rein ereignisgesteuert (Client-Anfrage/WebSocket-Push),
+# nichts zu planen -- Scheduler-Modul wird nicht gebraucht.
+disabled_modules:
+  - scheduler
