@@ -1,0 +1,37 @@
+# astrapi-sync – Python-Abhängigkeiten
+# Installation:
+#   python -m venv .venv
+#   source .venv/bin/activate
+#   pip install -r requirements.txt
+#   pip install -e .
+#
+# Starten:
+#   astrapi-sync --work-dir ./data --port 5004
+
+# ── Web-Framework ─────────────────────────────────────────────────
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# ── UI / Templates ────────────────────────────────────────────────
+jinja2>=3.1
+
+# ── Scheduler ─────────────────────────────────────────────────────
+APScheduler>=3.10
+
+# ── Daten & Konfiguration ─────────────────────────────────────────
+pyyaml>=6.0
+python-multipart>=0.0.9
+cryptography>=42.0
+
+# ── System-Monitoring ─────────────────────────────────────────────
+psutil>=6.0
+
+# ── Tests ─────────────────────────────────────────────────────────
+pytest>=8.0
+httpx>=0.27
+
+# ── Astrapi-Core (lokale Entwicklungsversion) ─────────────────────
+-e ../astrapi-core
+
+# ── Entwicklungstools ─────────────────────────────────────────────
+ruff>=0.4

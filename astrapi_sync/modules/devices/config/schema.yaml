@@ -1,0 +1,37 @@
+id_field: id
+fields:
+  - name: label
+    type: text
+    label: Bezeichnung
+    placeholder: "Laptop Michael"
+    max: 120
+    column: 1
+    row: 1
+
+  - name: platform
+    type: select
+    label: Plattform
+    column: 2
+    row: 1
+    options:
+      - value: cli
+        label: "CLI"
+      - value: gtk
+        label: "GTK4-App"
+      - value: android
+        label: "Android"
+
+  - name: folder_ids
+    type: multiselect
+    label: Ordner
+    options_endpoint: /api/folders/for-select
+    column: 1
+    row: 2
+    colspan: 2
+
+  - name: enabled
+    type: boolean
+    label: Aktiviert
+    default: true
+    column: 1
+    row: 3

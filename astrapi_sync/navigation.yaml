@@ -1,0 +1,7 @@
+# navigation.yaml – Modulreihenfolge im Menü
+- key:   folders
+  group: Sync
+  label: Ordner
+- key:   devices
+  group: Sync
+  label: Geräte
