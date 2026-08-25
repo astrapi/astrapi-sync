@@ -21,6 +21,7 @@ from astrapi_core.ui.field_resolver import register_options_fetcher as _reg  # n
 from astrapi_sync.modules.folders.ui.crud import folders_for_select  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import api_router as router  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import router as ui_router  # noqa: E402
+from astrapi_sync.modules.folders.ui import files as _files  # noqa: E402,F401 – registriert Routen auf api_router (=router)
 
 
 def _folders_options_fetcher(endpoint: str) -> list:

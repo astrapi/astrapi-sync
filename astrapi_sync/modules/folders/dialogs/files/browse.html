@@ -1,0 +1,142 @@
+{#
+  folders/dialogs/files/browse.html
+  Verzeichnis-Browser-Content für einen Sync-Ordner.
+  Wird initial ins Modal eingebettet und danach per HTMX in
+  #folder-files-content getauscht.
+
+  Variablen:
+    item_id     – Ordner-ID
+    path        – aktueller Verzeichnispfad (ohne führenden Slash)
+    breadcrumbs – list[{label, path}]
+    dirs        – list[{name, path}]
+    files       – list[{name, path, size_fmt, mtime}]
+    parent_path – str | None (None = an der Wurzel)
+    error       – str | None
+#}
+
+{# ── Breadcrumbs ─────────────────────────────────────────────────────────── #}
+<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;
+            padding:7px 12px; background:var(--card); border-radius:6px;
+            margin-bottom:12px; font-size:12px; font-family:var(--mono);">
+  {% for crumb in breadcrumbs %}
+    {% if not loop.last %}
+      <button style="padding:2px 6px; border-radius:4px; border:none; background:transparent;
+                     cursor:pointer; color:var(--b); font-family:var(--mono); font-size:12px;"
+              hx-get="/api/folders/{{ item_id }}/files/browse?path={{ crumb.path | urlencode }}"
+              hx-target="#folder-files-content"
+              hx-swap="innerHTML"
+              hx-indicator="#folder-files-loading">{{ crumb.label }}</button>
+      <span style="color:var(--text-3);">/</span>
+    {% else %}
+      <span style="color:var(--text-2);">{{ crumb.label }}</span>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{# ── Fehler ──────────────────────────────────────────────────────────────── #}
+{% if error %}
+<div style="padding:14px 18px; background:rgba(239,68,68,.1);
+            border:1px solid rgba(239,68,68,.3); border-radius:var(--rad-lg);
+            color:#f87171; font-size:13px;">
+  {{ error }}
+</div>
+
+{# ── Dateiliste ──────────────────────────────────────────────────────────── #}
+{% else %}
+<div class="content-item on" style="overflow:hidden;">
+
+  <div style="display:grid; grid-template-columns:1fr 90px 130px 32px;
+              padding:6px 14px; border-bottom:1px solid var(--border-s);
+              font-size:11px; font-weight:600; color:var(--text-3);
+              text-transform:uppercase; letter-spacing:.06em;">
+    <span>Name</span>
+    <span style="text-align:right;">Größe</span>
+    <span style="text-align:right; padding-right:4px;">Geändert</span>
+    <span></span>
+  </div>
+
+  <div style="max-height:420px; overflow-y:auto;">
+
+    {# Zurück-Button #}
+    {% if parent_path is not none %}
+    <button
+      style="display:grid; grid-template-columns:1fr 90px 130px 32px; align-items:center;
+             padding:8px 14px; border:none; background:transparent; width:100%;
+             border-bottom:1px solid var(--border-s); cursor:pointer; color:var(--text-2);
+             transition:background 100ms;"
+      onmouseover="this.style.background='rgba(128,128,128,0.07)'"
+      onmouseout="this.style.background='transparent'"
+      hx-get="/api/folders/{{ item_id }}/files/browse?path={{ parent_path | urlencode }}"
+      hx-target="#folder-files-content"
+      hx-swap="innerHTML"
+      hx-indicator="#folder-files-loading">
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px; font-family:var(--mono);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-chevron-left"></use></svg>
+        ..
+      </div>
+      <span></span><span></span><span></span>
+    </button>
+    {% endif %}
+
+    {# Verzeichnisse #}
+    {% for d in dirs %}
+    <button
+      style="display:grid; grid-template-columns:1fr 90px 130px 32px; align-items:center;
+             padding:8px 14px; border:none; background:transparent; width:100%;
+             border-bottom:1px solid var(--border-s); cursor:pointer; color:var(--text);
+             transition:background 100ms;"
+      onmouseover="this.style.background='rgba(128,128,128,0.07)'"
+      onmouseout="this.style.background='transparent'"
+      hx-get="/api/folders/{{ item_id }}/files/browse?path={{ d.path | urlencode }}"
+      hx-target="#folder-files-content"
+      hx-swap="innerHTML"
+      hx-indicator="#folder-files-loading">
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px; font-family:var(--mono);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:#f5c211; flex-shrink:0;"><use href="#icon-folder"></use></svg>
+        {{ d.name }}/
+      </div>
+      <span></span><span></span><span></span>
+    </button>
+    {% endfor %}
+
+    {# Dateien #}
+    {% for f in files %}
+    <div
+      style="display:grid; grid-template-columns:1fr 90px 130px 32px; align-items:center;
+             padding:8px 14px; border-bottom:1px solid var(--border-s);
+             transition:background 100ms;"
+      onmouseover="this.style.background='rgba(128,128,128,0.07)'"
+      onmouseout="this.style.background='transparent'">
+      <div style="display:flex; align-items:center; gap:8px; font-size:13px;
+                  font-family:var(--mono); min-width:0;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="color:var(--text-3); flex-shrink:0;"><use href="#icon-file"></use></svg>
+        <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.name }}</span>
+      </div>
+      <span style="font-size:11px; color:var(--text-3); text-align:right; font-family:var(--mono);">
+        {{ f.size_fmt }}
+      </span>
+      <span style="font-size:11px; color:var(--text-3); text-align:right; padding-right:4px;">
+        {{ f.mtime }}
+      </span>
+      <a href="/api/folders/{{ item_id }}/files/download?path={{ f.path | urlencode }}"
+         title="Herunterladen"
+         style="display:flex; align-items:center; justify-content:center;
+                width:28px; height:28px; border-radius:5px; color:var(--text-3);
+                transition:background 100ms, color 100ms;"
+         onmouseover="this.style.background='rgba(128,128,128,0.1)'; this.style.color='var(--text)'"
+         onmouseout="this.style.background='transparent'; this.style.color='var(--text-3)'">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-download"></use></svg>
+      </a>
+    </div>
+    {% endfor %}
+
+    {# Leer #}
+    {% if not dirs and not files %}
+    <div style="padding:24px; text-align:center; color:var(--text-3); font-size:13px;">
+      Dieses Verzeichnis ist leer.
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}

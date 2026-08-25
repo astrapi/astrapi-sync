@@ -25,7 +25,4 @@ def create(modules: list | None = None) -> FastAPI:
     from astrapi_sync.api.sync import router as sync_router
     app.include_router(sync_router)
 
-    from astrapi_sync.api.files import router as files_router
-    app.include_router(files_router)
-
     return app

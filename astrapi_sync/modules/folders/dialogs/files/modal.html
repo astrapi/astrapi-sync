@@ -1,0 +1,31 @@
+{#
+  folders/dialogs/files/modal.html
+  Dateibrowser für einen Sync-Ordner.
+
+  Variablen: item_id, description, path, breadcrumbs, dirs, files,
+             parent_path, error
+#}
+{% extends "dialog_core.html" %}
+
+{% block dialog_id %}folder-files-modal{% endblock %}
+{% block dialog_width %}760{% endblock %}
+{% block dialog_padding %}28px 32px{% endblock %}
+{% block dialog_title %}Dateien – {{ description }}{% endblock %}
+
+{% block dialog_body %}
+  <div id="folder-files-content">
+    {% include "folders/dialogs/files/browse.html" %}
+  </div>
+
+  <div id="folder-files-loading" class="htmx-indicator"
+       style="text-align:center; padding:10px 0; color:var(--text-3); font-size:13px;">
+    Lade …
+  </div>
+{% endblock %}
+
+{% block dialog_footer %}
+<div class="ds-modal-footer">
+  <span></span>
+  <button type="button" class="btn btn-ghost btn-sm" onclick="closeModal(this)">Schließen</button>
+</div>
+{% endblock %}

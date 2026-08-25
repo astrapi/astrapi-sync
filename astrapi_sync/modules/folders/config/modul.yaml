@@ -3,5 +3,5 @@ nav_group:   Sync
 nav_default: true
 
 card_actions:
-  - type: open_url
-    url: /files/{item}/
+  - type: files
+    url: /api/folders/{item}/files
