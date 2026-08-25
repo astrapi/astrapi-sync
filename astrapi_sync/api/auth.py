@@ -8,6 +8,7 @@ das beim Pairing einmalig im Klartext ausgegeben und seither nur noch als
 SHA256-Hash gespeichert wird (wie ein Passwort).
 """
 import hashlib
+import hmac
 import time
 
 from fastapi import Header, HTTPException, Path
@@ -22,7 +23,9 @@ def get_device_by_token(token: str) -> tuple[str, dict] | None:
 
     token_hash = hash_token(token)
     for device_id, device in devices_store.list().items():
-        if device.get("token_hash") == token_hash:
+        # hmac.compare_digest() statt "==" -- schliesst Timing-Seitenkanaele
+        # beim Hash-Vergleich aus (T-218-SYNC).
+        if hmac.compare_digest(device.get("token_hash") or "", token_hash):
             return device_id, device
     return None
 
