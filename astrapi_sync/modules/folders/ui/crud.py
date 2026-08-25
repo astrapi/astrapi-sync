@@ -72,33 +72,56 @@ async def update_with_move(item_id: str, request: Request):
     """Wie crud_blueprint.py's edit_apply(), aber: ändert sich
     storage_location, wird der komplette Ordnerinhalt zuerst physisch
     verschoben, bevor die DB aktualisiert wird."""
-    from astrapi_sync._paths import folder_base, folder_path
+    from astrapi_sync._paths import extra_disk_options, folder_base, folder_lock, folder_path
 
     folder = store.get(item_id)
     if folder is None:
         return HTMLResponse("Ordner nicht gefunden", status_code=404)
 
     form = await request.form()
+    storage_location = form.get("storage_location", "")
+    # storage_location serverseitig gegen die im UI angebotenen Optionen
+    # validieren -- das Dropdown beschränkt die Auswahl zwar schon, aber
+    # ein direkter POST (am UI vorbei) könnte sonst jeden beliebigen
+    # String als Zielpfad einschleusen (T-219-SYNC).
+    if storage_location and storage_location not in extra_disk_options():
+        raise HTTPException(400, "Ungültiger Speicherort")
     data = {
         "description": form.get("description", ""),
-        "storage_location": form.get("storage_location", ""),
+        "storage_location": storage_location,
         "enabled": "1" in form.getlist("enabled"),
     }
 
     current_location = folder.get("storage_location") or ""
     target_location = data["storage_location"]
     if target_location != current_location:
-        old_path = folder_path(item_id)  # aktueller Ort, wird bei Bedarf angelegt
-        new_path = folder_base(target_location) / item_id
-        if new_path.exists() and any(new_path.iterdir()):
-            raise HTTPException(400, "Zielverzeichnis existiert bereits und ist nicht leer")
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-        if old_path.exists():
-            if new_path.exists():
-                new_path.rmdir()  # oben als leer geprüft, shutil.move braucht ein nicht existierendes Ziel
-            shutil.move(str(old_path), str(new_path))
-        else:
-            new_path.mkdir(parents=True, exist_ok=True)
+        # Lock schließt das TOCTOU-Fenster zwischen Leerheits-Check und
+        # Move gegen gleichzeitige Sync-API-Requests für denselben Ordner
+        # (die dasselbe Lock respektieren, siehe sync.py) -- ohne Lock
+        # könnte ein Client mitten in diesem Fenster eine Datei in den
+        # alten oder neuen Pfad schreiben.
+        with folder_lock(item_id):
+            old_path = folder_path(item_id)  # aktueller Ort, wird bei Bedarf angelegt
+            new_path = folder_base(target_location) / item_id
+            if new_path.exists() and any(new_path.iterdir()):
+                raise HTTPException(400, "Zielverzeichnis existiert bereits und ist nicht leer")
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                if old_path.exists():
+                    if new_path.exists():
+                        new_path.rmdir()  # oben als leer geprüft, shutil.move braucht ein nicht existierendes Ziel
+                    shutil.move(str(old_path), str(new_path))
+                else:
+                    new_path.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                # DB NICHT aktualisieren, wenn der Move fehlschlägt --
+                # sonst laufen DB (neuer Ort) und tatsächlicher
+                # Dateisystem-Zustand (alter/teilweiser Ort) auseinander.
+                # store.update() unten wird dadurch übersprungen.
+                raise HTTPException(
+                    500,
+                    f"Verschieben des Ordnerinhalts fehlgeschlagen, Speicherort NICHT geändert: {exc}",
+                ) from exc
 
     store.update(item_id, data)
     return RedirectResponse(f"/ui/{KEY}/content", status_code=303)
