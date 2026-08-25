@@ -51,6 +51,20 @@ def _resolve_fields(fields: list) -> list:
     return resolve_options_endpoint(fields)
 
 
+def _resolve_last_run(item_id: str, item: dict) -> dict:
+    """Speist "Letzter Lauf" aus dem Activity Log statt aus dem (bei
+    folders nie gepflegten) Job-Runner-Feld -- die Sync-Log-Einträge aus
+    T-212-SYNC (module="folders", item_id=<folder_id>) sind bereits die
+    passende Datenquelle, nur bisher nirgends an die Anzeige angebunden
+    (T-226-SYNC)."""
+    from astrapi_core.system.activity_log import list_runs_for_item
+
+    runs = list_runs_for_item(KEY, str(item_id), limit=1)
+    if runs:
+        item["last_run"] = runs[0].get("started_at")
+    return item
+
+
 api_router = make_htmx_crud_router(
     KEY,
     _DIR / "config" / "schema.yaml",
@@ -133,9 +147,8 @@ _crud = make_crud_router(
     KEY,
     schema_path=str(_DIR / "config" / "schema.yaml"),
     label="Ordner",
-    has_run_buttons=False,
     has_toggle=False,
-    has_status=False,
     resolve_fields_fn=_resolve_fields,
+    list_item_transform=_resolve_last_run,
 )
 router.include_router(_crud)

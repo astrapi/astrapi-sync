@@ -45,5 +45,15 @@ module = load_modul(
             Col.mono("id", "ID"),
             Col.text("storage_location", "Speicherort"),
         ],
+        # Explizit statt der ContentTable-Defaults (beide sowieso True) --
+        # frueher stand in crud.py's make_crud_router() has_run_buttons=False,
+        # has_status=False, was aber wirkungslos war: die deklarative
+        # ContentTable hier gewinnt laut list_wrapper_inner.html immer ueber
+        # die per Kontext uebergebenen Flags. "Letzter Lauf"/"Status" wurden
+        # dadurch trotzdem angezeigt, aber nie mit echten Werten befuellt --
+        # jetzt ueber list_item_transform() aus dem Activity Log gespeist
+        # (T-226-SYNC).
+        has_run_buttons=True,
+        has_status=True,
     ),
 )
