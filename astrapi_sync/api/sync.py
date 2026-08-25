@@ -5,6 +5,7 @@ Phase 1: Pairing. Phase 2: Datei-Index + Block-Delta-Upload/Download/Delete.
 Phase 3: WebSocket-Push bei Änderungen.
 """
 import json
+import os
 import secrets
 from pathlib import Path as PPath
 
@@ -229,14 +230,18 @@ async def upload_file(
             buf[start:end] = chunk
 
         del buf[size:]
-        target.write_bytes(bytes(buf))
+        # Temp-Datei + os.replace() statt direktem write_bytes() -- ein
+        # Absturz mitten im Schreiben hinterlaesst sonst eine halb
+        # geschriebene Datei ohne Wiederherstellung (T-224-SYNC, analog
+        # zum bereits atomaren Client-Download-Pfad in api_client.py).
+        tmp_target = target.with_name(f".{target.name}.tmp-{os.getpid()}")
+        tmp_target.write_bytes(bytes(buf))
 
         mtime = info.get("mtime")
         if mtime is not None:
-            import os
+            os.utime(tmp_target, (mtime, mtime))
 
-            os.utime(target, (mtime, mtime))
-
+        os.replace(tmp_target, target)
         new_hash = whole_file_hash(target)
 
     await manager.broadcast(folder_id, {"event": "changed", "path": rel_path})
