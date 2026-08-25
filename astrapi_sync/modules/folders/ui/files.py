@@ -18,20 +18,14 @@ from .crud import api_router as router
 from .crud import store
 
 
-def _safe_child(base: Path, *parts: str) -> Path:
-    """Gibt aufgelösten Pfad zurück; wirft 400 bei Path-Traversal."""
-    resolved = (base / Path(*parts)).resolve()
-    if not str(resolved).startswith(str(base.resolve())):
-        raise HTTPException(400, "Ungültiger Pfad")
-    return resolved
-
-
 def _fmt_mtime(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
 
 def _dir_listing(root: Path, cur: str) -> tuple[list, list]:
-    target = _safe_child(root, cur) if cur else root
+    from astrapi_sync._paths import resolve_within
+
+    target = resolve_within(root, cur) if cur else root
     if not target.is_dir():
         raise HTTPException(404, "Verzeichnis nicht gefunden")
     try:
@@ -108,7 +102,7 @@ def files_browse(item_id: str, request: Request, path: str = ""):
 
 @router.get("/{item_id}/files/download")
 def files_download(item_id: str, path: str):
-    from astrapi_sync._paths import folder_path
+    from astrapi_sync._paths import folder_path, resolve_within
 
     folder = store.get(item_id)
     if folder is None:
@@ -116,7 +110,7 @@ def files_download(item_id: str, path: str):
     clean = path.strip("/")
     if not clean or any(part == ".." for part in PurePosixPath(clean).parts):
         raise HTTPException(400, "Ungültiger Pfad")
-    target = _safe_child(folder_path(item_id), clean)
+    target = resolve_within(folder_path(item_id), clean)
     if not target.is_file():
         raise HTTPException(404, "Datei nicht gefunden")
     return FileResponse(str(target), filename=target.name)
