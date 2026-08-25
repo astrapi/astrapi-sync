@@ -1,3 +1,7 @@
 label:       Ordner
 nav_group:   Sync
 nav_default: true
+
+card_actions:
+  - type: move
+    url: /ui/folders/{item}/move

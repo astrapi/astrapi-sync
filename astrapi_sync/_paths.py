@@ -9,44 +9,43 @@ def package_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def _extra_disk() -> str:
-    """Gibt den ersten konfigurierten Zusatzspeicher zurück, oder ''.
+def extra_disk_options() -> list[str]:
+    """Alle konfigurierten Zusatzspeicher-Pfade (Einstellungen -> System ->
+    "Zusätzlicher Speicher", core-weites Setting system.extra_disks).
 
-    Die Einstellung "Zusätzlicher Speicher" (system.extra_disks) ist ein
-    core-weites System-Setting (astrapi_core/modules/system/config/settings.yaml,
-    type: list), in jeder astrapi-App automatisch unter Einstellungen ->
-    System verfügbar. get_module() liefert für type:list-Settings eine
-    echte Python-Liste zurück (astrapi_mirror._paths::_extra_disk() geht
-    von einem Komma-String aus und würde bei einer echten Liste mit
-    AttributeError abstürzen -- hier bewusst robust gegen beide Formen).
+    get_module() liefert für type:list-Settings eine echte Python-Liste
+    zurück (astrapi_mirror._paths::_extra_disk() geht von einem
+    Komma-String aus und würde bei einer echten Liste mit AttributeError
+    abstürzen -- hier bewusst robust gegen beide Formen).
     """
     from astrapi_core.ui.settings_registry import get_module
 
     raw = get_module("system", "extra_disks", default=[]) or []
     if isinstance(raw, str):
         raw = raw.split(",")
-    for path in raw:
-        path = (path or "").strip()
-        if path:
-            return path
-    return ""
+    return [p.strip() for p in raw if p and p.strip()]
 
 
-def folders_root() -> Path:
-    """Wurzelverzeichnis, unter dem jeder Sync-Ordner sein eigenes Unterverzeichnis hat."""
-    disk = _extra_disk()
-    if disk:
-        return Path(disk).resolve() / "astrapi-sync"
+def folder_base(storage_location: str) -> Path:
+    """Wurzelverzeichnis für einen gegebenen Speicherort ("" = Standard,
+    sonst einer der konfigurierten Zusatzspeicher-Pfade)."""
+    if storage_location:
+        return Path(storage_location).resolve() / "astrapi-sync"
     return work_dir().resolve() / "folders"
 
 
 def folder_path(folder_id) -> Path:
-    """Plattenpfad eines einzelnen Sync-Ordners. Legt ihn bei Bedarf an.
+    """Plattenpfad eines einzelnen Sync-Ordners -- abhängig von dessen
+    eigenem storage_location-Feld (nicht global), legt ihn bei Bedarf an.
 
     Ordner werden nach ihrer numerischen ID benannt (nicht nach dem
-    änderbaren Label) -- stabil auch wenn der Anzeigename später geändert
+    änderbaren Namen) -- stabil auch wenn der Anzeigename später geändert
     wird.
     """
-    p = folders_root() / str(folder_id)
+    from astrapi_sync.modules.folders.ui.crud import store as folders_store
+
+    folder = folders_store.get(str(folder_id)) or {}
+    location = folder.get("storage_location") or ""
+    p = folder_base(location) / str(folder_id)
     p.mkdir(parents=True, exist_ok=True)
     return p

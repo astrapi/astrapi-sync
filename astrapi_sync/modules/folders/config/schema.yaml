@@ -9,9 +9,16 @@ fields:
     row: 1
     colspan: 2
 
+  - name: storage_location
+    type: info
+    label: Speicherort
+    column: 1
+    row: 2
+    colspan: 2
+
   - name: enabled
     type: boolean
     label: Aktiviert
     default: true
     column: 1
-    row: 2
+    row: 3

@@ -7,9 +7,10 @@ _KEY = Path(__file__).parent.name
 
 _DDL = """
     CREATE TABLE IF NOT EXISTS folders (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        description TEXT    NOT NULL DEFAULT '',
-        enabled     INTEGER NOT NULL DEFAULT 1
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        description      TEXT    NOT NULL DEFAULT '',
+        storage_location TEXT    NOT NULL DEFAULT '',
+        enabled          INTEGER NOT NULL DEFAULT 1
     )"""
 
 register_table(_KEY, _DDL)
@@ -20,6 +21,7 @@ from astrapi_core.ui.field_resolver import register_options_fetcher as _reg  # n
 from astrapi_sync.modules.folders.ui.crud import folders_for_select  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import api_router as router  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import router as ui_router  # noqa: E402
+from astrapi_sync.modules.folders.ui import move as _move  # noqa: E402,F401 – registriert Routen auf ui_router
 
 
 def _folders_options_fetcher(endpoint: str) -> list:
@@ -41,6 +43,7 @@ module = load_modul(
     ui_content=ContentTable(
         columns=[
             Col.mono("id", "ID"),
+            Col.text("storage_location", "Speicherort"),
         ],
     ),
 )

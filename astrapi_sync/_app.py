@@ -38,6 +38,22 @@ def _db_check() -> tuple[bool, dict]:
         return False, {"db": False}
 
 
+def _migrate_folders_storage_location() -> None:
+    """register_table()'s DDL ist CREATE TABLE IF NOT EXISTS -- legt bei
+    bereits bestehender Tabelle keine neuen Spalten nach. storage_location
+    kam nachträglich dazu (T-202-SYNC), hier per ALTER TABLE ergänzt."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(folders)")]
+        if "storage_location" not in cols:
+            con.execute("ALTER TABLE folders ADD COLUMN storage_location TEXT NOT NULL DEFAULT ''")
+            con.commit()
+    except Exception:
+        pass
+
+
 def create_app() -> FastAPI:
     _pkg = package_dir()
     configure_settings(health_fn=_db_check, app_name=get_display_name(_pkg))
@@ -48,6 +64,7 @@ def create_app() -> FastAPI:
 
     _configure_db(db_path())
     create_all_registered_tables()
+    _migrate_folders_storage_location()
 
     settings_init(work_dir())
 
