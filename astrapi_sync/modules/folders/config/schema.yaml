@@ -1,0 +1,17 @@
+id_field: id
+fields:
+  - name: description
+    type: text
+    label: Bezeichnung
+    placeholder: "Dokumente"
+    max: 120
+    column: 1
+    row: 1
+    colspan: 2
+
+  - name: enabled
+    type: boolean
+    label: Aktiviert
+    default: true
+    column: 1
+    row: 2

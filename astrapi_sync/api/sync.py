@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/sync", tags=["sync"])
 
 class PairRequest(BaseModel):
     token: str
-    label: str = ""
+    description: str = ""
     platform: str = ""
 
 
@@ -31,7 +31,7 @@ def pair(payload: PairRequest):
     item_id = devices_store.create(
         None,
         {
-            "label": payload.label or "Neues Gerät",
+            "description": payload.description or "Neues Gerät",
             "platform": payload.platform or "",
             "folder_ids": folder_ids,
             "token_hash": token_hash,

@@ -1,6 +1,6 @@
 id_field: id
 fields:
-  - name: label
+  - name: description
     type: text
     label: Bezeichnung
     placeholder: "Laptop Michael"

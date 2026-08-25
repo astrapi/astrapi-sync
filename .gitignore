@@ -2,8 +2,6 @@ __pycache__/
 *.pyc
 *.egg-info/
 .venv/
-data/
-folders/
 var/
 app.db
 pip_*.txt

@@ -7,9 +7,9 @@ _KEY = Path(__file__).parent.name
 
 _DDL = """
     CREATE TABLE IF NOT EXISTS devices (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        label      TEXT    NOT NULL DEFAULT '',
-        platform   TEXT    NOT NULL DEFAULT '',
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        description TEXT    NOT NULL DEFAULT '',
+        platform    TEXT    NOT NULL DEFAULT '',
         folder_ids TEXT    NOT NULL DEFAULT '',
         token_hash TEXT    NOT NULL DEFAULT '',
         last_seen  TEXT    NOT NULL DEFAULT '',
