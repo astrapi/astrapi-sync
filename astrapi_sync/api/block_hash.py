@@ -8,7 +8,7 @@ Vereinfachung, siehe Architektur-Abschnitt im Plan.
 
 Kein persistenter Hash-Cache in dieser Phase -- Hashes werden bei jeder
 Index-Anfrage neu berechnet. Für sehr große, selten geänderte Dateien
-später ggf. über (Pfad, mtime, Größe) cachen.
+später ggf. über (Pfad, mtime, Größe) cachen (T-220-SYNC).
 """
 import hashlib
 from pathlib import Path
@@ -36,15 +36,33 @@ def whole_file_hash(path: Path) -> str:
     return h.hexdigest()
 
 
+def hash_file_and_blocks(path: Path, block_size: int = DEFAULT_BLOCK_SIZE) -> tuple[str, list[str]]:
+    """Liest die Datei nur EINMAL, liefert Gesamt-Hash und Block-Hashes
+    gemeinsam aus denselben gelesenen Chunks -- file_entry() brauchte
+    vorher zwei komplett unabhängige Lesedurchläufe über denselben Inhalt
+    (whole_file_hash() + hash_blocks()) (T-220-SYNC)."""
+    whole = hashlib.sha256()
+    blocks = []
+    with open(path, "rb") as f:
+        while True:
+            chunk = f.read(block_size)
+            if not chunk:
+                break
+            whole.update(chunk)
+            blocks.append(hashlib.sha256(chunk).hexdigest())
+    return whole.hexdigest(), blocks
+
+
 def file_entry(path: Path, rel_path: str, block_size: int = DEFAULT_BLOCK_SIZE) -> dict:
     stat = path.stat()
+    sha256, blocks = hash_file_and_blocks(path, block_size)
     return {
         "path": rel_path,
         "size": stat.st_size,
         "mtime": stat.st_mtime,
         "block_size": block_size,
-        "sha256": whole_file_hash(path),
-        "blocks": hash_blocks(path, block_size),
+        "sha256": sha256,
+        "blocks": blocks,
     }
 
 
