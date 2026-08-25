@@ -9,17 +9,10 @@ fields:
     row: 1
 
   - name: platform
-    type: select
+    type: info
     label: Plattform
     column: 2
     row: 1
-    options:
-      - value: cli
-        label: "CLI"
-      - value: gtk
-        label: "GTK4-App"
-      - value: android
-        label: "Android"
 
   - name: folder_ids
     type: multiselect

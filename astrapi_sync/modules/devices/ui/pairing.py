@@ -22,3 +22,28 @@ def pair_dialog(request: Request):
             "ttl_minutes": ttl_seconds() // 60,
         },
     )
+
+
+@router.get(f"/ui/{KEY}/{{item_id}}/reconnect", response_class=HTMLResponse)
+def reconnect_dialog(item_id: str, request: Request):
+    """Erzeugt einen Pairing-Code, der beim Einlösen NICHT ein neues Gerät
+    anlegt, sondern nur das Token des bestehenden ersetzt -- Plattform,
+    Beschreibung und Ordner-Zugriff bleiben unverändert."""
+    from astrapi_sync.modules.devices.ui.crud import store as devices_store
+
+    device = devices_store.get(item_id)
+    if device is None:
+        return HTMLResponse("Gerät nicht gefunden", status_code=404)
+
+    token = create_pairing_token(device_id=item_id)
+    server_url = str(request.base_url).rstrip("/")
+    return render(
+        request,
+        f"{KEY}/dialogs/pair/modal.html",
+        {
+            "token": token,
+            "server_url": server_url,
+            "ttl_minutes": ttl_seconds() // 60,
+            "device_description": device.get("description"),
+        },
+    )

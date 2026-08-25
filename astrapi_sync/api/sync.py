@@ -43,10 +43,26 @@ def pair(payload: PairRequest):
     from astrapi_sync.modules.devices.ui.crud import store as devices_store
     from astrapi_sync.modules.folders.ui.crud import folders_for_select
 
-    if not redeem_pairing_token(payload.token):
+    pairing_info = redeem_pairing_token(payload.token)
+    if pairing_info is None:
         raise HTTPException(400, "Ungültiger oder abgelaufener Pairing-Code")
 
     device_token = secrets.token_urlsafe(32)
+    existing_device_id = pairing_info.get("device_id")
+
+    if existing_device_id is not None:
+        # Neu verbinden: nur das Token ersetzen, Plattform/Beschreibung/
+        # Ordner-Zugriff bleiben unangetastet (siehe devices/ui/pairing.py).
+        existing = devices_store.get(existing_device_id)
+        if existing is None:
+            raise HTTPException(404, "Gerät wurde inzwischen gelöscht")
+        devices_store.update(existing_device_id, {"token_hash": hash_token(device_token)})
+        return {
+            "device_id": existing_device_id,
+            "device_token": device_token,
+            "folder_ids": existing.get("folder_ids") or [],
+        }
+
     folder_ids = [str(f["value"]) for f in folders_for_select(enabled_only=True)]
 
     item_id = devices_store.create(
