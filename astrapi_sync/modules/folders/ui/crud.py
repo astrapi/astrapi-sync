@@ -50,9 +50,29 @@ def _resolve_last_run(item_id: str, item: dict) -> dict:
     return item
 
 
+def _delete_guard(item_id: str) -> str | None:
+    """Verhindert das Löschen eines Ordners, der noch mindestens einem
+    Gerät zugeordnet ist -- sonst zeigt das Gerät danach auf einen nicht
+    mehr existierenden Ordner (folder_ids liefe ins Leere)."""
+    from astrapi_sync.modules.devices.ui.crud import store as devices_store
+
+    referencing = [
+        d.get("description") or did
+        for did, d in devices_store.list().items()
+        if str(item_id) in [str(fid) for fid in (d.get("folder_ids") or [])]
+    ]
+    if not referencing:
+        return None
+    return (
+        f"Ordner wird noch von {len(referencing)} Gerät(en) verwendet "
+        f"({', '.join(referencing)}) -- zuerst dort entfernen."
+    )
+
+
 api_router = make_htmx_crud_router(
     KEY,
     _DIR / "config" / "schema.yaml",
+    can_delete_fn=_delete_guard,
 )
 
 
