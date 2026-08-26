@@ -32,13 +32,13 @@ def package_dir() -> Path:
 
 def folder_base() -> Path:
     """Wurzelverzeichnis aller Sync-Ordner. Zusatzspeicher ist Pflicht
-    (kein stiller Rückfall aufs Arbeitsverzeichnis, T-24X-SYNC) -- eigenes
-    Unterverzeichnis, da "Zusätzlicher Speicher" ein core-weites Setting
-    ist, das eine andere astrapi-App auf demselben Datenträger ebenfalls
-    nutzen könnte."""
+    (kein stiller Rückfall aufs Arbeitsverzeichnis, T-244-SYNC) -- direkt
+    der konfigurierte Datenträger, ohne eigenes App-Unterverzeichnis
+    (jede App läuft in einer eigenen LXC mit eigenem Datenträger,
+    T-244-SYNC/T-245-SYNC)."""
     from astrapi_core.system.paths import require_extra_disk
 
-    return Path(require_extra_disk()).resolve() / "astrapi-sync"
+    return Path(require_extra_disk()).resolve()
 
 
 def resolve_within(root: Path, rel_path: str) -> Path:
