@@ -5,6 +5,7 @@ Phase 1: Pairing. Phase 2: Datei-Index + Block-Delta-Upload/Download/Delete.
 Phase 3: WebSocket-Push bei Änderungen.
 """
 import json
+import logging
 import os
 import secrets
 from pathlib import Path as PPath
@@ -26,6 +27,8 @@ from astrapi_sync.api.auth import authenticate, hash_token, require_device, requ
 from astrapi_sync.api.block_hash import DEFAULT_BLOCK_SIZE, build_dir_index, build_index, whole_file_hash
 from astrapi_sync.api.ws_manager import manager
 
+log = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
 
@@ -36,6 +39,28 @@ class PairRequest(BaseModel):
     token: str
     description: str = ""
     platform: str = ""
+
+
+def _notify_new_device(description: str, platform: str) -> None:
+    """Benachrichtigt (falls konfiguriert) ueber ein frisch gepairtes Gerät --
+    nur fuer echte Neuzugaenge, nicht fuer "Neu verbinden" (Token-Ersatz
+    eines bereits bekannten Geraets, siehe pair()). Wie in den anderen
+    astrapi-Apps ueblich (z.B. astrapi_mirror/modules/debian/jobs.py) ohne
+    register_source() -- ein reiner String-Schluessel reicht fuer die
+    Job-Filterung in notify.send(), eine Fehlermeldung darf den Pairing-
+    Vorgang selbst nicht verhindern."""
+    try:
+        from astrapi_core.modules.notify import engine as notify_engine
+
+        notify_engine.send(
+            title="Neues Gerät verbunden",
+            message=f"„{description}“ ({platform or 'unbekannte Plattform'}) hat sich mit astrapi-sync gekoppelt.",
+            event=notify_engine.INFO,
+            source="devices",
+            tags=["gerät", "pairing"],
+        )
+    except Exception as e:
+        log.warning("notify: Benachrichtigung für neues Gerät fehlgeschlagen: %s", e)
 
 
 @router.post("/pair")
@@ -93,6 +118,7 @@ def pair(payload: PairRequest):
         description=f"Neues Gerät „{payload.description or 'Neues Gerät'}“ gepairt",
         status="ok",
     )
+    _notify_new_device(payload.description or "Neues Gerät", payload.platform)
 
     return {
         "device_id": item_id,
