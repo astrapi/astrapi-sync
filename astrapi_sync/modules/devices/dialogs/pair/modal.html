@@ -19,6 +19,25 @@
 </p>
 {% endif %}
 
+{% if qr_svg %}
+{# QR-Code fuer einen kuenftigen Kamera-Scanner (z.B. in der Android-App) --
+   enthaelt server_url + token als JSON, dieselben zwei Felder wie der
+   manuelle CLI-Befehl unten. Noch kein Scanner-Client vorhanden, rein
+   serverseitige Vorbereitung. #}
+<div style="margin:0 0 16px; text-align:center;">
+  <div style="display:inline-block; padding:10px; background:#fff; border-radius:var(--rad);">
+    <div class="pairing-qr-wrap" style="width:180px; height:180px;">
+      {{ qr_svg | safe }}
+    </div>
+  </div>
+</div>
+<style>
+  /* qrcode liefert ein SVG mit fester mm-Groesse (image_factory=SvgPathImage)
+     -- hier auf die feste Container-Groesse oben skaliert. */
+  .pairing-qr-wrap svg { width: 100%; height: 100%; }
+</style>
+{% endif %}
+
 <div style="margin:14px 0 6px;">
   <label class="form-label">Server</label>
   <div style="display:flex; gap:6px; align-items:center;">

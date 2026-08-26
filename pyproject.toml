@@ -13,6 +13,7 @@ dependencies = [
     "cryptography==50.0.0",
     "psutil==7.2.2",
     "apispec==6.10.0",
+    "qrcode==8.2",
     "astrapi-core>=26.8.23",
 ]
 
