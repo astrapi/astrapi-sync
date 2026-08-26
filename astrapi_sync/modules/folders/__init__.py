@@ -43,7 +43,6 @@ module = load_modul(
     ui_content=ContentTable(
         columns=[
             Col.mono("id", "ID"),
-            Col.text("storage_location", "Speicherort"),
         ],
         # Explizit statt der ContentTable-Defaults (beide sowieso True) --
         # frueher stand in crud.py's make_crud_router() has_run_buttons=False,

@@ -9,17 +9,9 @@ fields:
     row: 1
     colspan: 2
 
-  - name: storage_location
-    type: select
-    label: Speicherort
-    options_endpoint: /api/folders/storage-locations
-    column: 1
-    row: 2
-    colspan: 2
-
   - name: enabled
     type: boolean
     label: Aktiviert
     default: true
     column: 1
-    row: 3
+    row: 2

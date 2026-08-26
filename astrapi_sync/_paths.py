@@ -30,29 +30,15 @@ def package_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def extra_disk_options() -> list[str]:
-    """Alle konfigurierten Zusatzspeicher-Pfade (Einstellungen -> System ->
-    "Zusätzlicher Speicher", core-weites Setting system.extra_disks).
+def folder_base() -> Path:
+    """Wurzelverzeichnis aller Sync-Ordner. Zusatzspeicher ist Pflicht
+    (kein stiller Rückfall aufs Arbeitsverzeichnis, T-24X-SYNC) -- eigenes
+    Unterverzeichnis, da "Zusätzlicher Speicher" ein core-weites Setting
+    ist, das eine andere astrapi-App auf demselben Datenträger ebenfalls
+    nutzen könnte."""
+    from astrapi_core.system.paths import require_extra_disk
 
-    get_module() liefert für type:list-Settings eine echte Python-Liste
-    zurück (astrapi_mirror._paths::_extra_disk() geht von einem
-    Komma-String aus und würde bei einer echten Liste mit AttributeError
-    abstürzen -- hier bewusst robust gegen beide Formen).
-    """
-    from astrapi_core.ui.settings_registry import get_module
-
-    raw = get_module("system", "extra_disks", default=[]) or []
-    if isinstance(raw, str):
-        raw = raw.split(",")
-    return [p.strip() for p in raw if p and p.strip()]
-
-
-def folder_base(storage_location: str) -> Path:
-    """Wurzelverzeichnis für einen gegebenen Speicherort ("" = Standard,
-    sonst einer der konfigurierten Zusatzspeicher-Pfade)."""
-    if storage_location:
-        return Path(storage_location).resolve() / "astrapi-sync"
-    return work_dir().resolve() / "folders"
+    return Path(require_extra_disk()).resolve() / "astrapi-sync"
 
 
 def resolve_within(root: Path, rel_path: str) -> Path:
@@ -70,17 +56,12 @@ def resolve_within(root: Path, rel_path: str) -> Path:
 
 
 def folder_path(folder_id) -> Path:
-    """Plattenpfad eines einzelnen Sync-Ordners -- abhängig von dessen
-    eigenem storage_location-Feld (nicht global), legt ihn bei Bedarf an.
+    """Plattenpfad eines einzelnen Sync-Ordners, legt ihn bei Bedarf an.
 
     Ordner werden nach ihrer numerischen ID benannt (nicht nach dem
     änderbaren Namen) -- stabil auch wenn der Anzeigename später geändert
     wird.
     """
-    from astrapi_sync.modules.folders.ui.crud import store as folders_store
-
-    folder = folders_store.get(str(folder_id)) or {}
-    location = folder.get("storage_location") or ""
-    p = folder_base(location) / str(folder_id)
+    p = folder_base() / str(folder_id)
     p.mkdir(parents=True, exist_ok=True)
     return p

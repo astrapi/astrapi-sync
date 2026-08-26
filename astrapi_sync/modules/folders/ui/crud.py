@@ -1,23 +1,23 @@
 # astrapi_sync/modules/folders/ui/crud.py
-"""Speicherort (storage_location) ist ein normales Auswahlfeld in
-Anlegen- UND Bearbeiten-Dialog (schema.yaml). Anlegen läuft komplett
-generisch über crud_blueprint.py -- ein neuer Ordner ist leer, der Wert
-kann direkt gesetzt werden. Bearbeiten wird unten überschrieben: ändert
-sich der Speicherort, muss der komplette Ordnerinhalt physisch
-mitverschoben werden (sonst "verliert" der Client scheinbar seine
-Dateien, siehe T-203-SYNC) -- das kann crud_blueprint.py's generischer
-edit_apply() nicht.
+"""Jeder Sync-Ordner liegt zwingend unter dem einen konfigurierten
+Zusatzspeicher (_paths.py::folder_base(), require_extra_disk()) -- kein
+Wahlfeld mehr pro Ordner (frueher storage_location, siehe T-201-SYNC bis
+T-219-SYNC), daher auch kein Verschieben zwischen Speicherorten mehr
+noetig. Anlegen ist trotzdem eigens überschrieben: crud_blueprint.py's
+generischer create_apply() macht nur einen DB-Insert, ruehrt nie ans
+Dateisystem -- create_with_check() unten prueft den Zusatzspeicher
+sofort auf Schreibbarkeit, statt das erst beim ersten echten Sync eines
+Clients auffallen zu lassen (T-240-SYNC). Bearbeiten hat dagegen keine
+Dateisystem-Seiteneffekte mehr und laeuft komplett generisch.
 
 Eigene Route zuerst auf einem eigenen APIRouter registriert, generischer
 Router erst danach per include_router() eingehängt -- FastAPI matcht die
-zuerst registrierte Route zuerst, das eigene update_with_move()
-überschattet damit crud_blueprint.py's edit_apply() für denselben Pfad
+zuerst registrierte Route zuerst, das eigene create_with_check()
+überschattet damit crud_blueprint.py's create_apply() für denselben Pfad
 (gleiches Muster wie proxmox_lxc/create-modal, devices/pairing)."""
-import shutil
 from pathlib import Path
 
 from astrapi_core.ui.crud_blueprint import make_crud_router
-from astrapi_core.ui.field_resolver import register_options_fetcher, resolve_options_endpoint
 from astrapi_core.ui.htmx_crud_router import make_htmx_crud_router
 from astrapi_core.ui.store import SqliteTableStore
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -34,21 +34,6 @@ def folders_for_select(enabled_only: bool = True) -> list[dict]:
         for fid, f in store.list().items()
         if not enabled_only or f.get("enabled")
     ]
-
-
-def storage_location_options() -> list[dict]:
-    from astrapi_sync._paths import extra_disk_options
-
-    options = [{"value": "", "label": "Standard (Arbeitsverzeichnis)"}]
-    options += [{"value": disk, "label": disk} for disk in extra_disk_options()]
-    return options
-
-
-register_options_fetcher("/api/folders/storage-locations", lambda _endpoint: storage_location_options())
-
-
-def _resolve_fields(fields: list) -> list:
-    return resolve_options_endpoint(fields)
 
 
 def _resolve_last_run(item_id: str, item: dict) -> dict:
@@ -81,74 +66,43 @@ def for_select(enabled: str = Query(default="1")):
 router = APIRouter()
 
 
-@router.post(f"/ui/{KEY}/{{item_id}}/update", response_class=HTMLResponse)
-async def update_with_move(item_id: str, request: Request):
-    """Wie crud_blueprint.py's edit_apply(), aber: ändert sich
-    storage_location, wird der komplette Ordnerinhalt zuerst physisch
-    verschoben, bevor die DB aktualisiert wird."""
-    from astrapi_sync._paths import extra_disk_options, folder_base, folder_lock, folder_path
-
-    folder = store.get(item_id)
-    if folder is None:
-        return HTMLResponse("Ordner nicht gefunden", status_code=404)
+@router.post(f"/ui/{KEY}/", response_class=HTMLResponse)
+async def create_with_check(request: Request):
+    """Wie crud_blueprint.py's create_apply(), aber: der (verpflichtende)
+    Zusatzspeicher wird sofort nach dem Anlegen auf Schreibbarkeit geprüft
+    (T-240-SYNC), statt sich erst beim ersten echten Sync eines Clients zu
+    zeigen -- das rein generische create_apply() macht nur einen
+    DB-Insert, ohne das Dateisystem je zu berühren. Ein Ordner blieb
+    dadurch bisher unbemerkt angelegt, obwohl kein Zusatzspeicher
+    konfiguriert oder dieser nicht beschreibbar war (siehe
+    _paths.py::folder_path(), einzige Stelle mit dem eigentlichen
+    .mkdir())."""
+    from astrapi_sync._paths import folder_path
 
     form = await request.form()
-    storage_location = form.get("storage_location", "")
-    # storage_location serverseitig gegen die im UI angebotenen Optionen
-    # validieren -- das Dropdown beschränkt die Auswahl zwar schon, aber
-    # ein direkter POST (am UI vorbei) könnte sonst jeden beliebigen
-    # String als Zielpfad einschleusen (T-219-SYNC).
-    if storage_location and storage_location not in extra_disk_options():
-        raise HTTPException(400, "Ungültiger Speicherort")
     data = {
         "description": form.get("description", ""),
-        "storage_location": storage_location,
         "enabled": "1" in form.getlist("enabled"),
     }
-
-    current_location = folder.get("storage_location") or ""
-    target_location = data["storage_location"]
-    if target_location != current_location:
-        # Lock schließt das TOCTOU-Fenster zwischen Leerheits-Check und
-        # Move gegen gleichzeitige Sync-API-Requests für denselben Ordner
-        # (die dasselbe Lock respektieren, siehe sync.py) -- ohne Lock
-        # könnte ein Client mitten in diesem Fenster eine Datei in den
-        # alten oder neuen Pfad schreiben.
-        with folder_lock(item_id):
-            old_path = folder_path(item_id)  # aktueller Ort, wird bei Bedarf angelegt
-            new_path = folder_base(target_location) / item_id
-            if new_path.exists() and any(new_path.iterdir()):
-                raise HTTPException(400, "Zielverzeichnis existiert bereits und ist nicht leer")
-            new_path.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                if old_path.exists():
-                    if new_path.exists():
-                        new_path.rmdir()  # oben als leer geprüft, shutil.move braucht ein nicht existierendes Ziel
-                    shutil.move(str(old_path), str(new_path))
-                else:
-                    new_path.mkdir(parents=True, exist_ok=True)
-            except OSError as exc:
-                # DB NICHT aktualisieren, wenn der Move fehlschlägt --
-                # sonst laufen DB (neuer Ort) und tatsächlicher
-                # Dateisystem-Zustand (alter/teilweiser Ort) auseinander.
-                # store.update() unten wird dadurch übersprungen.
-                raise HTTPException(
-                    500,
-                    f"Verschieben des Ordnerinhalts fehlgeschlagen, Speicherort NICHT geändert: {exc}",
-                ) from exc
-
-    store.update(item_id, data)
+    item_id = store.create(None, data)
+    try:
+        folder_path(item_id)  # legt das Verzeichnis an -- deckt fehlenden/nicht beschreibbaren Zusatzspeicher sofort auf
+    except (OSError, RuntimeError) as exc:
+        # DB-Eintrag wieder entfernen, statt einen Ordner ohne
+        # nutzbaren Speicherort zurückzulassen.
+        store.delete(item_id)
+        raise HTTPException(500, f"Ordner NICHT angelegt: {exc}") from exc
     return RedirectResponse(f"/ui/{KEY}/content", status_code=303)
 
 
-# Generische CRUD-Routen danach (update wird durch die obige Route überschattet)
+# Generische CRUD-Routen danach (create wird durch die obige Route überschattet;
+# update/edit läuft jetzt komplett generisch, siehe Docstring oben)
 _crud = make_crud_router(
     store,
     KEY,
     schema_path=str(_DIR / "config" / "schema.yaml"),
     label="Ordner",
     has_toggle=False,
-    resolve_fields_fn=_resolve_fields,
     list_item_transform=_resolve_last_run,
 )
 router.include_router(_crud)
