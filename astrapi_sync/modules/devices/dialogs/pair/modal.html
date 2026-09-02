@@ -38,22 +38,34 @@
 </style>
 {% endif %}
 
-<div style="margin:14px 0 6px;">
+<div style="margin:14px 0 6px;" x-data="{copied:false}">
   <label class="form-label">Server</label>
   <div style="display:flex; gap:6px; align-items:center;">
     <code class="mono" x-ref="serverUrl" style="flex:1; padding:8px 10px; background:var(--card-2,var(--card)); border-radius:var(--rad); overflow-x:auto;">{{ server_url }}</code>
-    <button type="button" class="btn-icon" title="Kopieren" x-on:click="copyToClipboard($refs.serverUrl.textContent.trim())">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+    <button type="button" class="btn-icon" title="Kopieren"
+            x-on:click="copyToClipboard($refs.serverUrl.textContent.trim()); copied=true; setTimeout(()=>copied=false,1500)">
+      <template x-if="!copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+      </template>
+      <template x-if="copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-check"></use></svg>
+      </template>
     </button>
   </div>
 </div>
 
-<div style="margin:6px 0 6px;">
+<div style="margin:6px 0 6px;" x-data="{copied:false}">
   <label class="form-label">Pairing-Code</label>
   <div style="display:flex; gap:6px; align-items:center;">
     <code class="mono" x-ref="token" style="flex:1; padding:8px 10px; background:var(--card-2,var(--card)); border-radius:var(--rad); overflow-x:auto; word-break:break-all;">{{ token }}</code>
-    <button type="button" class="btn-icon" title="Kopieren" x-on:click="copyToClipboard($refs.token.textContent.trim())">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+    <button type="button" class="btn-icon" title="Kopieren"
+            x-on:click="copyToClipboard($refs.token.textContent.trim()); copied=true; setTimeout(()=>copied=false,1500)">
+      <template x-if="!copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+      </template>
+      <template x-if="copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-check"></use></svg>
+      </template>
     </button>
   </div>
 </div>
@@ -63,12 +75,18 @@
    Die Einzelfelder bleiben zusätzlich bestehen, z.B. für die GTK4-/
    Android-App, die keinen Shell-Befehl braucht. #}
 {% set cli_cmd = "astrapi-sync-cli pair '" ~ server_url ~ "' '" ~ token ~ "'" %}
-<div style="margin:14px 0 6px;">
+<div style="margin:14px 0 6px;" x-data="{copied:false}">
   <label class="form-label">CLI-Befehl</label>
   <div style="display:flex; gap:6px; align-items:center;">
     <code class="mono" x-ref="cmd" style="flex:1; padding:8px 10px; background:var(--card-2,var(--card)); border-radius:var(--rad); overflow-x:auto; word-break:break-all;">{{ cli_cmd }}</code>
-    <button type="button" class="btn-icon" title="Kopieren" x-on:click="copyToClipboard($refs.cmd.textContent.trim())">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+    <button type="button" class="btn-icon" title="Kopieren"
+            x-on:click="copyToClipboard($refs.cmd.textContent.trim()); copied=true; setTimeout(()=>copied=false,1500)">
+      <template x-if="!copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-copy"></use></svg>
+      </template>
+      <template x-if="copied">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-check"></use></svg>
+      </template>
     </button>
   </div>
 </div>
