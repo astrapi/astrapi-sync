@@ -13,7 +13,8 @@ _DDL = """
         folder_ids TEXT    NOT NULL DEFAULT '',
         token_hash TEXT    NOT NULL DEFAULT '',
         last_seen  TEXT    NOT NULL DEFAULT '',
-        enabled    INTEGER NOT NULL DEFAULT 1
+        enabled    INTEGER NOT NULL DEFAULT 1,
+        unifiedpush_endpoint_url TEXT NOT NULL DEFAULT ''
     )"""
 
 register_table(_KEY, _DDL, list_fields=["folder_ids"])

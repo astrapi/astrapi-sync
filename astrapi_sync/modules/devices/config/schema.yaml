@@ -28,3 +28,9 @@ fields:
     default: true
     column: 1
     row: 3
+
+  - name: unifiedpush_endpoint_url
+    type: info
+    label: Echtzeit-Push registriert
+    column: 2
+    row: 3

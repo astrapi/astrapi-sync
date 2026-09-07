@@ -12,6 +12,7 @@ from pathlib import Path as PPath
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -25,6 +26,7 @@ from pydantic import BaseModel
 
 from astrapi_sync.api.auth import authenticate, hash_token, require_device, require_device_only
 from astrapi_sync.api.block_hash import DEFAULT_BLOCK_SIZE, build_dir_index, build_index, whole_file_hash
+from astrapi_sync.api.push import get_push_targets, post_push
 from astrapi_sync.api.ws_manager import manager
 
 log = logging.getLogger(__name__)
@@ -145,6 +147,25 @@ def list_folders(device=Depends(require_device_only)):
     }
 
 
+# ── UnifiedPush-Registrierung (Echtzeit-Sync-Weckruf, Android) ──────────────
+
+
+class PushRegistration(BaseModel):
+    endpoint_url: str
+
+
+@router.post("/push-endpoint")
+def register_push_endpoint(payload: PushRegistration, device=Depends(require_device_only)):
+    """Kein folder_id im Pfad -- das Gerät registriert sich als Ganzes,
+    nicht pro Ordner (analog list_folders()). Leerer String deregistriert
+    (kein separater DELETE-Endpunkt nötig)."""
+    from astrapi_sync.modules.devices.ui.crud import store as devices_store
+
+    device_id, _dev = device
+    devices_store.update(device_id, {"unifiedpush_endpoint_url": payload.endpoint_url})
+    return {"status": "ok"}
+
+
 # ── Datei-Index (Phase 2) ────────────────────────────────────────────────────
 
 
@@ -187,6 +208,7 @@ def download_file(folder_id: str, rel_path: str, device=Depends(require_device))
 async def upload_file(
     folder_id: str,
     rel_path: str,
+    background_tasks: BackgroundTasks,
     meta: str = Form(...),
     data: UploadFile | None = File(default=None),
     device=Depends(require_device),
@@ -270,7 +292,10 @@ async def upload_file(
         os.replace(tmp_target, target)
         new_hash = whole_file_hash(target)
 
+    device_id, _dev = device
     await manager.broadcast(folder_id, {"event": "changed", "path": rel_path})
+    for url in get_push_targets(folder_id, device_id):
+        background_tasks.add_task(post_push, url)
     return {"status": "ok", "sha256": new_hash}
 
 
@@ -278,14 +303,22 @@ async def upload_file(
 
 
 @router.delete("/folders/{folder_id}/files/{rel_path:path}")
-async def delete_file(folder_id: str, rel_path: str, device=Depends(require_device)):
+async def delete_file(
+    folder_id: str,
+    rel_path: str,
+    background_tasks: BackgroundTasks,
+    device=Depends(require_device),
+):
     from astrapi_sync._paths import folder_lock
 
     with folder_lock(folder_id):
         target = _resolve_file_path(folder_id, rel_path)
         if target.is_file():
             target.unlink()
+    device_id, _dev = device
     await manager.broadcast(folder_id, {"event": "deleted", "path": rel_path})
+    for url in get_push_targets(folder_id, device_id):
+        background_tasks.add_task(post_push, url)
     return {"status": "ok"}
 
 
@@ -297,18 +330,31 @@ async def delete_file(folder_id: str, rel_path: str, device=Depends(require_devi
 
 
 @router.post("/folders/{folder_id}/dirs/{rel_path:path}")
-async def create_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
+async def create_dir(
+    folder_id: str,
+    rel_path: str,
+    background_tasks: BackgroundTasks,
+    device=Depends(require_device),
+):
     from astrapi_sync._paths import folder_lock
 
     with folder_lock(folder_id):
         target = _resolve_file_path(folder_id, rel_path)
         target.mkdir(parents=True, exist_ok=True)
+    device_id, _dev = device
     await manager.broadcast(folder_id, {"event": "dir_created", "path": rel_path})
+    for url in get_push_targets(folder_id, device_id):
+        background_tasks.add_task(post_push, url)
     return {"status": "ok"}
 
 
 @router.delete("/folders/{folder_id}/dirs/{rel_path:path}")
-async def delete_dir(folder_id: str, rel_path: str, device=Depends(require_device)):
+async def delete_dir(
+    folder_id: str,
+    rel_path: str,
+    background_tasks: BackgroundTasks,
+    device=Depends(require_device),
+):
     from astrapi_sync._paths import folder_lock
 
     deleted = False
@@ -326,7 +372,10 @@ async def delete_dir(folder_id: str, rel_path: str, device=Depends(require_devic
                 # Ergebnis-Report).
                 pass
     if deleted:
+        device_id, _dev = device
         await manager.broadcast(folder_id, {"event": "dir_deleted", "path": rel_path})
+        for url in get_push_targets(folder_id, device_id):
+            background_tasks.add_task(post_push, url)
     return {"status": "ok", "deleted": deleted}
 
 

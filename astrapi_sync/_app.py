@@ -54,6 +54,21 @@ def _migrate_folders_storage_location() -> None:
         pass
 
 
+def _migrate_devices_unifiedpush_endpoint() -> None:
+    """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
+    unifiedpush_endpoint_url kam nachträglich zur devices-DDL dazu."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(devices)")]
+        if "unifiedpush_endpoint_url" not in cols:
+            con.execute("ALTER TABLE devices ADD COLUMN unifiedpush_endpoint_url TEXT NOT NULL DEFAULT ''")
+            con.commit()
+    except Exception:
+        pass
+
+
 def create_app() -> FastAPI:
     _pkg = package_dir()
     configure_settings(health_fn=_db_check, app_name=get_display_name(_pkg))
@@ -65,6 +80,7 @@ def create_app() -> FastAPI:
     _configure_db(db_path())
     create_all_registered_tables()
     _migrate_folders_storage_location()
+    _migrate_devices_unifiedpush_endpoint()
 
     settings_init(work_dir())
 
