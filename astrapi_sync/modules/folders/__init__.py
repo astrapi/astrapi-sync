@@ -10,7 +10,9 @@ _DDL = """
         id               INTEGER PRIMARY KEY AUTOINCREMENT,
         description      TEXT    NOT NULL DEFAULT '',
         storage_location TEXT    NOT NULL DEFAULT '',
-        enabled          INTEGER NOT NULL DEFAULT 1
+        group_id         TEXT    NOT NULL DEFAULT '',
+        enabled          INTEGER NOT NULL DEFAULT 1,
+        owner_user_id    INTEGER NOT NULL DEFAULT 0
     )"""
 
 register_table(_KEY, _DDL)
@@ -43,6 +45,7 @@ module = load_modul(
     ui_content=ContentTable(
         columns=[
             Col.mono("id", "ID"),
+            Col.text("group_description", "Gruppe"),
         ],
         # Explizit statt der ContentTable-Defaults (beide sowieso True) --
         # frueher stand in crud.py's make_crud_router() has_run_buttons=False,

@@ -3,12 +3,13 @@ from pathlib import Path
 
 from astrapi_core.ui.crud_blueprint import make_crud_router
 from astrapi_core.ui.field_resolver import resolve_options_endpoint
-from astrapi_core.ui.htmx_crud_router import make_htmx_crud_router
 from astrapi_core.ui.store import SqliteTableStore
+from astrapi_sync.modules._owner_store import OwnerScopedStore, make_owner_crud_api_router
 
 KEY = "devices"
 _DIR = Path(__file__).parent.parent
 store = SqliteTableStore(KEY)
+ui_store = OwnerScopedStore(store)
 
 
 def _resolve_fields(fields: list) -> list:
@@ -29,13 +30,14 @@ def _resolve_folder_labels(item_id: str, item: dict) -> dict:
     return item
 
 
-api_router = make_htmx_crud_router(
+api_router = make_owner_crud_api_router(
     KEY,
     _DIR / "config" / "schema.yaml",
+    ui_store,
 )
 
 router = make_crud_router(
-    store,
+    ui_store,
     KEY,
     schema_path=str(_DIR / "config" / "schema.yaml"),
     label="Gerät",

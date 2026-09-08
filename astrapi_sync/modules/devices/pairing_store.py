@@ -19,14 +19,17 @@ import time
 
 _TTL_SECONDS = 600
 
-# token -> {"created_at": float, "device_id": str | None}
+# token -> {"created_at": float, "device_id": str | None, "owner_user_id": int | None}
 _pending: dict[str, dict] = {}
 
 
-def create_pairing_token(device_id: str | None = None) -> str:
+def create_pairing_token(device_id: str | None = None, owner_user_id: int | None = None) -> str:
+    """owner_user_id: bei Neu-Pairing (device_id=None) der einladende
+    Web-Nutzer -- /api/sync/pair() ordnet das neue Gerät und dessen
+    Default-Ordner diesem Nutzer zu (Mandantentrennung, T-Multi-User)."""
     _cleanup()
     token = secrets.token_urlsafe(24)
-    _pending[token] = {"created_at": time.time(), "device_id": device_id}
+    _pending[token] = {"created_at": time.time(), "device_id": device_id, "owner_user_id": owner_user_id}
     return token
 
 

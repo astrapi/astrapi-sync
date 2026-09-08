@@ -100,7 +100,14 @@ def pair(payload: PairRequest):
             "folder_ids": existing.get("folder_ids") or [],
         }
 
-    folder_ids = [str(f["value"]) for f in folders_for_select(enabled_only=True)]
+    owner_user_id = pairing_info.get("owner_user_id")
+    if owner_user_id is None:
+        from astrapi_core.system.auth import _default_user_id
+
+        owner_user_id = _default_user_id()
+    folder_ids = [
+        str(f["value"]) for f in folders_for_select(enabled_only=True, owner_user_id=owner_user_id)
+    ]
 
     item_id = devices_store.create(
         None,
@@ -111,6 +118,7 @@ def pair(payload: PairRequest):
             "token_hash": hash_token(device_token),
             "last_seen": "",
             "enabled": True,
+            "owner_user_id": owner_user_id,
         },
     )
     log_activity(
@@ -134,13 +142,27 @@ def pair(payload: PairRequest):
 
 @router.get("/folders")
 def list_folders(device=Depends(require_device_only)):
+    from astrapi_sync.modules.folder_groups.ui.crud import store as groups_store
     from astrapi_sync.modules.folders.ui.crud import store as folders_store
 
     _device_id, dev = device
     allowed = set(dev.get("folder_ids") or [])
+    groups = groups_store.list()
+
+    def _folder_info(fid: str, f: dict) -> dict:
+        gid = f.get("group_id") or None
+        group = groups.get(gid) if gid else None
+        return {
+            "id": fid,
+            "description": f.get("description") or fid,
+            "group_id": gid,
+            "group_description": (group.get("name") if group else None) or gid,
+            "group_color": group.get("color") if group else None,
+        }
+
     return {
         "folders": [
-            {"id": fid, "description": f.get("description") or fid}
+            _folder_info(fid, f)
             for fid, f in folders_store.list().items()
             if fid in allowed
         ]

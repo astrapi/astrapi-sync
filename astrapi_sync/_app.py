@@ -69,6 +69,73 @@ def _migrate_devices_unifiedpush_endpoint() -> None:
         pass
 
 
+def _migrate_folders_owner_user_id() -> None:
+    """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
+    owner_user_id kam nachträglich zur folders-DDL dazu (Mandantentrennung).
+    Bestehende Zeilen (owner_user_id=0) werden dem impliziten Default-User
+    zugeordnet, damit niemandem seine Alt-Ordner verschwinden."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(folders)")]
+        if "owner_user_id" not in cols:
+            con.execute("ALTER TABLE folders ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0")
+            con.commit()
+        n = con.execute("SELECT COUNT(*) AS n FROM folders WHERE owner_user_id=0").fetchone()["n"]
+        if n:
+            from astrapi_core.system.auth import _default_user_id
+
+            con.execute("UPDATE folders SET owner_user_id=? WHERE owner_user_id=0", (_default_user_id(),))
+            con.commit()
+    except Exception:
+        pass
+
+
+def _migrate_devices_owner_user_id() -> None:
+    """Gleiches Muster wie _migrate_folders_owner_user_id(), Tabelle devices."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(devices)")]
+        if "owner_user_id" not in cols:
+            con.execute("ALTER TABLE devices ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0")
+            con.commit()
+        n = con.execute("SELECT COUNT(*) AS n FROM devices WHERE owner_user_id=0").fetchone()["n"]
+        if n:
+            from astrapi_core.system.auth import _default_user_id
+
+            con.execute("UPDATE devices SET owner_user_id=? WHERE owner_user_id=0", (_default_user_id(),))
+            con.commit()
+    except Exception:
+        pass
+
+
+class _SetCurrentUserMiddleware:
+    """Setzt den eingeloggten Web-Nutzer (aus der Session-Cookie) pro Request
+    in api.user_context, damit devices/folders-UI-Routen ihn owner-scopen
+    können. Getrennt von der Geräte-Bearer-Token-Auth (api/auth.py)."""
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        from astrapi_core.system import auth as authmod
+        from starlette.requests import Request
+
+        from astrapi_sync.api.user_context import set_current_user
+
+        request = Request(scope, receive=receive)
+        token = request.cookies.get(authmod.SESSION_COOKIE_NAME)
+        set_current_user(authmod.get_current_user(token))
+        await self.app(scope, receive, send)
+
+
 def create_app() -> FastAPI:
     _pkg = package_dir()
     configure_settings(health_fn=_db_check, app_name=get_display_name(_pkg))
@@ -81,11 +148,14 @@ def create_app() -> FastAPI:
     create_all_registered_tables()
     _migrate_folders_storage_location()
     _migrate_devices_unifiedpush_endpoint()
+    _migrate_folders_owner_user_id()
+    _migrate_devices_owner_user_id()
 
     settings_init(work_dir())
 
     modules, _ = load_modules(_pkg)
     api = create_api(modules=modules)
+    api.add_middleware(_SetCurrentUserMiddleware)
 
     from pathlib import Path
 

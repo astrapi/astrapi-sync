@@ -10,3 +10,18 @@ icon_svg: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0
 # nichts zu planen -- Scheduler-Modul wird nicht gebraucht.
 disabled_modules:
   - scheduler
+
+# Mandantentrennung (T-Multi-User): jede Person sieht/verwaltet nur ihre
+# eigenen Ordner/Geräte. password_fallback bleibt true fuer den
+# Bootstrap-/Default-User (Uebergangsloesung bis HTTPS steht, siehe
+# system/auth.py); eingeladene Zusatznutzer bekommen nur Passkey-Login
+# (multi_user_routes.py). /api/sync muss ausgenommen bleiben -- eigene
+# Geraete-Bearer-Token-Auth, kein Web-Login (Android-App/CLI).
+auth:
+  enabled: true
+  multi_user: true
+  rp_id: sync.simpsons.lan
+  rp_name: astrapi-sync
+  password_fallback: true
+  exempt_prefixes:
+    - /api/sync

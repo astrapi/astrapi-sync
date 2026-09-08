@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 
 from astrapi_core.ui.render import render
 
+from astrapi_sync.api.user_context import current_user_id
 from astrapi_sync.modules.devices.pairing_store import create_pairing_token, ttl_seconds
 from astrapi_sync.modules.devices.ui.crud import KEY, router
 
@@ -26,7 +27,7 @@ def _qr_svg(server_url: str, token: str) -> str:
 
 @router.get(f"/ui/{KEY}/pair", response_class=HTMLResponse)
 def pair_dialog(request: Request):
-    token = create_pairing_token()
+    token = create_pairing_token(owner_user_id=current_user_id())
     server_url = str(request.base_url).rstrip("/")
     return render(
         request,
@@ -45,7 +46,7 @@ def reconnect_dialog(item_id: str, request: Request):
     """Erzeugt einen Pairing-Code, der beim Einlösen NICHT ein neues Gerät
     anlegt, sondern nur das Token des bestehenden ersetzt -- Plattform,
     Beschreibung und Ordner-Zugriff bleiben unverändert."""
-    from astrapi_sync.modules.devices.ui.crud import store as devices_store
+    from astrapi_sync.modules.devices.ui.crud import ui_store as devices_store
 
     device = devices_store.get(item_id)
     if device is None:

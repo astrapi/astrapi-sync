@@ -15,7 +15,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .crud import api_router as router
-from .crud import store
+from .crud import ui_store as store
 
 
 def _fmt_mtime(ts: float) -> str:
