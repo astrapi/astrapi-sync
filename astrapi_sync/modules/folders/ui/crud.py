@@ -18,6 +18,7 @@ zuerst registrierte Route zuerst, das eigene create_with_check()
 from pathlib import Path
 
 from astrapi_core.ui.crud_blueprint import make_crud_router
+from astrapi_core.ui.field_resolver import resolve_options_endpoint
 from astrapi_core.ui.store import SqliteTableStore
 from astrapi_sync.modules._owner_store import OwnerScopedStore, make_owner_crud_api_router
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -45,6 +46,10 @@ def folders_for_select(enabled_only: bool = True, owner_user_id: int | None = No
     ]
 
 
+def _resolve_fields(fields: list) -> list:
+    return resolve_options_endpoint(fields)
+
+
 def _resolve_last_run(item_id: str, item: dict) -> dict:
     """Speist "Letzter Lauf" aus dem Activity Log statt aus dem (bei
     folders nie gepflegten) Job-Runner-Feld -- die Sync-Log-Einträge aus
@@ -56,32 +61,6 @@ def _resolve_last_run(item_id: str, item: dict) -> dict:
     runs = list_runs_for_item(KEY, str(item_id), limit=1)
     if runs:
         item["last_run"] = runs[0].get("started_at")
-    return item
-
-
-def _group_meta() -> dict:
-    """{group_id: {"label", "color"}} für die Gruppen-Trennzeilen in
-    list_wrapper_inner.html (group_by_field="group_id" unten) -- owner-
-    gescoped wie folders selbst, aus demselben Grund wie
-    OwnerScopedStore.get() (Verteidigung gegen fremde group_ids, auch wenn
-    diese normalerweise nie auftreten können, da /api/folder_groups/
-    for-select nur eigene Gruppen zur Auswahl anbietet)."""
-    from astrapi_sync.modules.folder_groups.ui.crud import ui_store as groups_store
-
-    return {
-        gid: {"label": g.get("name") or gid, "color": g.get("color") or None}
-        for gid, g in groups_store.list().items()
-    }
-
-
-def _resolve_display(item_id: str, item: dict) -> dict:
-    item = _resolve_last_run(item_id, item)
-    gid = item.get("group_id")
-    if gid:
-        meta = _group_meta().get(gid)
-        item["group_description"] = (meta or {}).get("label") or gid
-    else:
-        item["group_description"] = ""
     return item
 
 
@@ -138,7 +117,7 @@ async def create_with_check(request: Request):
     form = await request.form()
     data = {
         "description": form.get("description", ""),
-        "group_id": form.get("group_id", ""),
+        "color": form.get("color", ""),
         "enabled": "1" in form.getlist("enabled"),
     }
     item_id = ui_store.create(None, data)
@@ -160,8 +139,7 @@ _crud = make_crud_router(
     schema_path=str(_DIR / "config" / "schema.yaml"),
     label="Ordner",
     has_toggle=False,
-    list_item_transform=_resolve_display,
-    group_by_field="group_id",
-    group_meta_fn=_group_meta,
+    resolve_fields_fn=_resolve_fields,
+    list_item_transform=_resolve_last_run,
 )
 router.include_router(_crud)

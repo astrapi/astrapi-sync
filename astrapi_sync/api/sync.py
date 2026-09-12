@@ -142,22 +142,16 @@ def pair(payload: PairRequest):
 
 @router.get("/folders")
 def list_folders(device=Depends(require_device_only)):
-    from astrapi_sync.modules.folder_groups.ui.crud import store as groups_store
     from astrapi_sync.modules.folders.ui.crud import store as folders_store
 
     _device_id, dev = device
     allowed = set(dev.get("folder_ids") or [])
-    groups = groups_store.list()
 
     def _folder_info(fid: str, f: dict) -> dict:
-        gid = f.get("group_id") or None
-        group = groups.get(gid) if gid else None
         return {
             "id": fid,
             "description": f.get("description") or fid,
-            "group_id": gid,
-            "group_description": (group.get("name") if group else None) or gid,
-            "group_color": group.get("color") if group else None,
+            "color": f.get("color") or None,
         }
 
     return {

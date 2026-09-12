@@ -54,6 +54,25 @@ def _migrate_folders_storage_location() -> None:
         pass
 
 
+def _migrate_folders_color() -> None:
+    """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
+    color kam nachträglich zur folders-DDL dazu (ersetzt group_id/das
+    entfernte folder_groups-Modul durch eine freie Farbkategorie pro
+    Ordner). Die alte group_id-Spalte bleibt als harmlose Karteileiche
+    bestehen -- kein SQLite-DROP COLUMN, da der bisherige Stand ohnehin
+    nur auf sync-dev existiert und nie released wurde."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(folders)")]
+        if "color" not in cols:
+            con.execute("ALTER TABLE folders ADD COLUMN color TEXT NOT NULL DEFAULT ''")
+            con.commit()
+    except Exception:
+        pass
+
+
 def _migrate_devices_unifiedpush_endpoint() -> None:
     """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
     unifiedpush_endpoint_url kam nachträglich zur devices-DDL dazu."""
@@ -138,6 +157,15 @@ class _SetCurrentUserMiddleware:
 
 def create_app() -> FastAPI:
     _pkg = package_dir()
+
+    # Sync-Ordner liegen direkt auf der Wurzel ("/{folder_id}/..."), das
+    # Dashboard wird per Caddy unter /admin reverse-proxied. Siehe
+    # astrapi_core.system.paths.set_admin_prefix()-Docstring. Muss vor
+    # load_modules() gesetzt sein.
+    from astrapi_core.system.paths import set_admin_prefix
+
+    set_admin_prefix("/admin")
+
     configure_settings(health_fn=_db_check, app_name=get_display_name(_pkg))
     configure_updater(_pkg)
 
@@ -147,6 +175,7 @@ def create_app() -> FastAPI:
     _configure_db(db_path())
     create_all_registered_tables()
     _migrate_folders_storage_location()
+    _migrate_folders_color()
     _migrate_devices_unifiedpush_endpoint()
     _migrate_folders_owner_user_id()
     _migrate_devices_owner_user_id()
@@ -167,6 +196,17 @@ def create_app() -> FastAPI:
     create_ui(api, app_root=_pkg, modules=modules)
 
     register_health(api, check_fn=_db_check, start_time=_START_TIME)
+
+    # public_files.router bewusst ganz zuletzt eingehaengt -- registriert
+    # u.a. den Catch-all "/{item_id}/{path:path}" auf der Wurzel, der
+    # sonst vor spezifischeren Routen (/health, /admin/..., /static/...)
+    # gewinnen wuerde (Starlette matcht in Registrierungsreihenfolge,
+    # nicht nach Spezifitaet -- siehe astrapi-mirror/-packages fuer den
+    # identischen Fall).
+    from astrapi_sync.api.public_files import router as public_files_router
+
+    api.include_router(public_files_router)
+
     start_watchdog(check_fn=lambda: _db_check()[0])
     sd_notify("READY=1")
     return api
