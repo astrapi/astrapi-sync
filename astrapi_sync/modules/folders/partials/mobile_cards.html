@@ -1,0 +1,32 @@
+{#
+  folders/partials/mobile_cards.html
+  Mobile-Karten für Ordner -- ersetzt den generischen Fallback: kein
+  rohes "ID"-Feld (interne DB-ID, für Endnutzer ohne Wert) und die
+  Kategorie-Farbe zusätzlich als Akzentstreifen am Kartenrand, damit sie
+  auch beim schnellen Scrollen auffällt (nicht nur im kleinen Punkt).
+#}
+{% import 'partials/components/mobile_card_macros.html' as mc %}
+{% import 'partials/components/ui_macros.html' as ui %}
+
+{% if cfg %}
+  {% for item_id, item in cfg.items() %}
+    {%- set is_running = (module ~ ":" ~ item_id) in (running or {}) -%}
+    {%- set _status = 'running' if is_running else (last_run_status(module, item_id) if last_run_status is defined else none) or item.get('last_status') -%}
+    {% set _footer %}{{ mc.m_card_actions_default(module, item_id, item, container_id, loading_id, card_actions=_card_actions, page=_page) }}{% endset %}
+    {% call mc.m_card(item.get('description') or item_id, status=_status, enabled=item.get('enabled', True), footer=_footer, accent=item.get('category_color')) %}
+      {{ mc.m_card_row('Letzter Lauf', ui.last_run_cell(item.get('last_run')) if item.get('last_run') else none) }}
+      {% if item.get('category_name') %}
+      <div class="m-card-meta-row">
+        <span class="m-card-meta-label">Kategorie</span>
+        <span class="m-card-meta-value"><span class="dot-swatch" style="background:{{ item.get('category_color') or 'transparent' }};"></span>{{ item.get('category_name') }}</span>
+      </div>
+      {% endif %}
+    {% endcall %}
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-file-text"></use></svg>
+    <div class="empty-state-title">Keine Einträge vorhanden</div>
+    <div class="empty-state-sub">Erstelle den ersten Eintrag mit „Neu"</div>
+  </div>
+{% endif %}
