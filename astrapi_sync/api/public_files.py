@@ -25,8 +25,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
 from astrapi_core.ui.file_listing import (
-    dir_link as _dir_link,
     list_dir_entries,
+    render_link_row,
     render_page as _page,
     render_row,
 )
@@ -48,16 +48,17 @@ def folders_index():
     from astrapi_sync.modules.folders.ui.crud import ui_store as folders_store
 
     folders = folders_store.list()
-    rows = "\n".join(
-        f'<tr><td>{_dir_link((f.get("description") or str(fid)) + "/", f"/{fid}/")}</td></tr>'
+    rows = [
+        render_link_row((f.get("description") or str(fid)) + "/", f"/{fid}/")
         for fid, f in sorted(folders.items(), key=lambda kv: (kv[1].get("description") or "").lower())
-    )
+    ]
     return HTMLResponse(
         _page(
             "Sync",
             '<a href="/admin">Zum Dashboard →</a>',
-            rows or "<tr><td>Keine Ordner.</td></tr>",
+            rows,
             col_headers=("Name",),
+            empty_message="Keine Ordner.",
         )
     )
 
@@ -103,13 +104,14 @@ def folder_serve(item_id: str, path: str, request: Request):
         back = "/"
 
     title = label + (f"/{path_clean}" if path_clean else "")
-    rows = "\n".join(render_row(e) for e in entries)
+    rows = [render_row(e) for e in entries]
     return HTMLResponse(
         _page(
             title,
             "",
-            rows or "<tr><td colspan='3'>Leer.</td></tr>",
+            rows,
             back=back,
             col_headers=("Name", "Geändert", "Größe"),
+            empty_message="Leer.",
         )
     )
