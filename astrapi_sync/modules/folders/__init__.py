@@ -21,6 +21,7 @@ from astrapi_core.ui.controls import Col, ContentTable, Header  # noqa: E402
 from astrapi_core.ui.field_resolver import register_options_fetcher as _reg  # noqa: E402
 
 from astrapi_sync.modules.folders.ui.crud import folders_for_select  # noqa: E402
+from astrapi_sync.modules.folders.ui.crud import category_options  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import api_router as router  # noqa: E402
 from astrapi_sync.modules.folders.ui.crud import router as ui_router  # noqa: E402
 from astrapi_sync.modules.folders.ui import files as _files  # noqa: E402,F401 – registriert Routen auf api_router (=router)
@@ -38,6 +39,9 @@ module = load_modul(
     router,
     ui_router,
     ui_header=Header([
+        Header.filter_select(
+            "category_id", options_fn=category_options, all_label="Alle Kategorien"
+        ),
         Header.action_button(
             "Neu", hx_get=f"/ui/{_KEY}/create", hx_target="body", style="primary", icon="plus"
         ),
@@ -45,7 +49,7 @@ module = load_modul(
     ui_content=ContentTable(
         columns=[
             Col.mono("id", "ID"),
-            Col.color("color", "Kategorie"),
+            Col.category("category_name", "Kategorie", color_key="category_color", sortable=True),
         ],
         # Explizit statt der ContentTable-Defaults (beide sowieso True) --
         # frueher stand in crud.py's make_crud_router() has_run_buttons=False,

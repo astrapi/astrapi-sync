@@ -9,9 +9,10 @@ fields:
     row: 1
     colspan: 2
 
-  - name: color
-    type: color_palette
+  - name: category_id
+    type: select
     label: Kategorie
+    options_endpoint: /api/categories/for-select
     column: 1
     row: 2
     colspan: 2

@@ -64,6 +64,35 @@ def _resolve_last_run(item_id: str, item: dict) -> dict:
     return item
 
 
+def _resolve_category(item_id: str, item: dict) -> dict:
+    """Loest category_id (T-324-SYNC) auf Anzeigename+-farbe fuer Col.category
+    auf -- categories.store ist owner-gescoped auf denselben current_user_id()
+    wie folders selbst, ein fremder/geloeschter category_id liefert schlicht
+    nichts (leerer Punkt in der Liste) statt eines Fehlers."""
+    from astrapi_core.modules.categories.ui.crud import store as categories_store
+
+    cat = categories_store.get(str(item.get("category_id") or "")) or {}
+    item["category_name"] = cat.get("name") or ""
+    item["category_color"] = cat.get("color") or ""
+    return item
+
+
+def _resolve_list_display(item_id: str, item: dict) -> dict:
+    item = _resolve_last_run(item_id, item)
+    item = _resolve_category(item_id, item)
+    return item
+
+
+def category_options() -> list[dict]:
+    """Fuer Header.filter_select() (Dropdown-Anzeige) UND filters= (die
+    eigentliche Filterlogik in resolve_filters_for_request()) -- categories
+    ist bereits owner-gescoped, categories_for_select() liefert also
+    automatisch nur die eigenen Kategorien des aktuellen Nutzers."""
+    from astrapi_core.modules.categories.ui.crud import categories_for_select
+
+    return categories_for_select()
+
+
 def _delete_guard(item_id: str) -> str | None:
     """Verhindert das Löschen eines Ordners, der noch mindestens einem
     Gerät zugeordnet ist -- sonst zeigt das Gerät danach auf einen nicht
@@ -117,7 +146,7 @@ async def create_with_check(request: Request):
     form = await request.form()
     data = {
         "description": form.get("description", ""),
-        "color": form.get("color", ""),
+        "category_id": form.get("category_id", ""),
         "enabled": "1" in form.getlist("enabled"),
     }
     item_id = ui_store.create(None, data)
@@ -140,6 +169,14 @@ _crud = make_crud_router(
     label="Ordner",
     has_toggle=False,
     resolve_fields_fn=_resolve_fields,
-    list_item_transform=_resolve_last_run,
+    list_item_transform=_resolve_list_display,
+    filters=[
+        {
+            "param": "category_id",
+            "label": "Kategorie",
+            "all_label": "Alle Kategorien",
+            "options_fn": category_options,
+        },
+    ],
 )
 router.include_router(_crud)

@@ -73,6 +73,26 @@ def _migrate_folders_color() -> None:
         pass
 
 
+def _migrate_folders_category_id() -> None:
+    """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
+    category_id kam nachtraeglich zur folders-DDL dazu (T-324-SYNC, loest
+    das freie color-Feld aus _migrate_folders_color() durch eine
+    Zuweisung auf den neuen, generischen Kategorien-Baustein aus
+    astrapi-core ab, siehe T-325-CORE). Die alte color-Spalte bleibt als
+    harmlose Karteileiche bestehen -- kein SQLite-DROP COLUMN, bestehende
+    Ordner behalten ihren alten Farbwert einfach ungenutzt."""
+    from astrapi_core.system.db import _conn
+
+    con = _conn()
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(folders)")]
+        if "category_id" not in cols:
+            con.execute("ALTER TABLE folders ADD COLUMN category_id INTEGER NOT NULL DEFAULT 0")
+            con.commit()
+    except Exception:
+        pass
+
+
 def _migrate_devices_unifiedpush_endpoint() -> None:
     """Gleiches Problem/Muster wie _migrate_folders_storage_location() --
     unifiedpush_endpoint_url kam nachträglich zur devices-DDL dazu."""
@@ -176,6 +196,7 @@ def create_app() -> FastAPI:
     create_all_registered_tables()
     _migrate_folders_storage_location()
     _migrate_folders_color()
+    _migrate_folders_category_id()
     _migrate_devices_unifiedpush_endpoint()
     _migrate_folders_owner_user_id()
     _migrate_devices_owner_user_id()
