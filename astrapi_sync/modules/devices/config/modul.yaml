@@ -1,7 +1,3 @@
 label:       Geräte
 nav_group:   Sync
 nav_default: false
-
-card_actions:
-  - type: reconnect
-    url: /ui/devices/{item}/reconnect

@@ -45,6 +45,16 @@ module = load_modul(
             Col.text("platform", "Plattform"),
             Col.join("folder_ids", "Ordner"),
             Col.text("last_seen", "Zuletzt gesehen"),
+            Col.text("owner_display", "Besitzer", sortable=False),
         ],
+        # Neu verbinden/Bearbeiten/Löschen nur für den eigenen Besitzer --
+        # ui_store bleibt für update()/delete() strikt owner-gescoped
+        # (auch für Admins, siehe _owner_store.py), diese Buttons würden
+        # bei einem fremden, nur dank admin_sees_all=True sichtbaren
+        # Gerät sonst immer mit 404 fehlschlagen. Eigenbau statt der
+        # generischen Buttons, siehe devices/partials/row_actions.html
+        # (T-333-SYNC).
+        has_edit=False,
+        has_delete=False,
     ),
 )

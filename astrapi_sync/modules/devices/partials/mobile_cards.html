@@ -1,0 +1,47 @@
+{#
+  devices/partials/mobile_cards.html
+  Eigene Fassung statt des generischen Fallbacks (T-333-SYNC), weil der
+  keine extra_actions_template/admin-Gating kennt (siehe dessen eigener
+  Konventions-Hinweis). Neu verbinden/Bearbeiten/Löschen nur für den
+  eigenen Besitzer, "Besitzer ändern" nur für Admins -- Admins sehen dank
+  admin_sees_all=True (crud.py) auch fremde Geräte, ui_store.update()/
+  delete() bleiben aber strikt owner-gescoped (siehe row_actions.html).
+#}
+{% import 'partials/components/mobile_card_macros.html' as mc %}
+{% import 'partials/components/ui_macros.html' as ui %}
+
+{% if cfg %}
+  {% for item_name, item in cfg.items() %}
+    {%- set _is_owner = current_user and item.owner_user_id == current_user.id -%}
+    {% set _footer %}
+      {% if _is_owner %}
+      <button type="button" class="btn-icon btn-icon-log" title="Neu verbinden (neuer Pairing-Code)" aria-label="Neu verbinden"
+              hx-get="/ui/devices/{{ item_name }}/reconnect" hx-target="body" hx-swap="beforeend">
+        {{ ui.icon("connection") }}
+      </button>
+      {{ ui.edit_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, page=_page) }}
+      {{ ui.delete_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, description=item.description or item_name) }}
+      {% endif %}
+      {% if current_user and current_user.is_admin %}
+      <button type="button" class="btn-icon" title="Besitzer ändern" aria-label="Besitzer ändern"
+              hx-get="/ui/devices/{{ item_name }}/reassign" hx-target="body" hx-swap="beforeend">
+        {{ ui.icon("users") }}
+      </button>
+      {% endif %}
+    {% endset %}
+    {% call mc.m_card(item.description or item_name, enabled=item.get('enabled', True), footer=_footer) %}
+      {{ mc.m_card_row('Plattform', item.get('platform')) }}
+      {{ mc.m_card_row('Ordner', item.get('folder_ids') | join(', ') if item.get('folder_ids') else none) }}
+      {{ mc.m_card_row('Zuletzt gesehen', item.get('last_seen')) }}
+      {% if current_user and current_user.is_admin %}
+        {{ mc.m_card_row('Besitzer', item.get('owner_display')) }}
+      {% endif %}
+    {% endcall %}
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-file-text"></use></svg>
+    <div class="empty-state-title">Keine Einträge vorhanden</div>
+    <div class="empty-state-sub">Erstelle den ersten Eintrag mit „Neu"</div>
+  </div>
+{% endif %}

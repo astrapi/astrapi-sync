@@ -1,0 +1,28 @@
+{#
+  devices/dialogs/reassign/modal.html
+  Besitzerwechsel eines Geräts -- admin-gated, siehe
+  _owner_store.py::make_reassign_owner_router()/require_admin(). Anders
+  als bei Ordnern gibt es hier keine Inhalts-Zugriffsbeschränkung -- ein
+  Gerät hat keinen "Inhalt", nur Metadaten (Name/Plattform/Ordner-
+  Zuordnung), die Admins ohnehin schon bearbeiten können, sobald sie es
+  in der Liste sehen (admin_sees_all=True).
+#}
+{% extends "dialog_form.html" %}
+{% import 'partials/components/ui_macros.html' as ui %}
+
+{% block dialog_width %}400{% endblock %}
+{% block dialog_title %}Besitzer ändern – {{ item.description or item_id }}{% endblock %}
+{% block form_method %}post{% endblock %}
+{% block form_action %}/ui/devices/{{ item_id }}/reassign{% endblock %}
+
+{% block dialog_body %}
+{% call ui.form_group('Besitzer') %}
+  {{ ui.form_select('owner_user_id', users_options, item.owner_user_id | string, placeholder='') }}
+{% endcall %}
+<span class="form-help">
+  Der neue Besitzer sieht dieses Gerät künftig in seiner eigenen
+  Geräte-Liste. Die zugeordneten Ordner (falls vorhanden) bleiben
+  unverändert -- gehören sie dem neuen Besitzer nicht, bitte ggf. separat
+  anpassen.
+</span>
+{% endblock %}

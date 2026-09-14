@@ -1,0 +1,26 @@
+{#
+  devices/partials/row_actions.html
+  extra_actions_template für list_wrapper_inner.html (has_edit/has_delete
+  sind für dieses Modul aus, siehe __init__.py) -- Neu verbinden/
+  Bearbeiten/Löschen nur für den eigenen Besitzer, "Besitzer ändern" nur
+  für Admins (T-333-SYNC). Admins sehen dank admin_sees_all=True (crud.py)
+  auch fremde Geräte in der Liste -- ui_store.update()/delete() bleiben
+  aber strikt owner-gescoped, ohne dieses Ausblenden würde ein Admin
+  Buttons sehen, die bei jedem Klick nur mit 404 enden.
+#}
+{% import 'partials/components/ui_macros.html' as ui %}
+{% set _is_owner = current_user and item_data.owner_user_id == current_user.id %}
+{% if _is_owner %}
+<button type="button" class="btn-icon btn-icon-log" title="Neu verbinden (neuer Pairing-Code)" aria-label="Neu verbinden"
+        hx-get="/ui/devices/{{ item_name }}/reconnect" hx-target="body" hx-swap="beforeend">
+  {{ ui.icon("connection") }}
+</button>
+{{ ui.edit_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, page=_page) }}
+{{ ui.delete_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, description=item_data.description or item_name) }}
+{% endif %}
+{% if current_user and current_user.is_admin %}
+<button type="button" class="btn-icon" title="Besitzer ändern" aria-label="Besitzer ändern"
+        hx-get="/ui/devices/{{ item_name }}/reassign" hx-target="body" hx-swap="beforeend">
+  {{ ui.icon("users") }}
+</button>
+{% endif %}

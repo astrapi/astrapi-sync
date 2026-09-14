@@ -61,6 +61,73 @@ class OwnerScopedStore:
         return self._inner.toggle(item_id, field=field, default=default)
 
 
+def require_admin() -> dict:
+    """Admin-Gate für Aktionen, die geräte-/ordnerübergreifend wirken
+    (aktuell nur der Besitzerwechsel, T-330-SYNC/T-333-SYNC). current_user
+    kommt aus der Request-weiten ContextVar (api/user_context.py)."""
+    from fastapi import HTTPException
+
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        raise HTTPException(403, "Nur Administratoren können den Besitzer ändern")
+    return user
+
+
+def make_reassign_owner_router(key: str, store: SqliteTableStore, dialog_template: str):
+    """Admin-only 'Besitzer ändern'-Routen (GET Dialog, POST anwenden) für
+    ein owner-gescoptes Modul (folders/devices, T-330-SYNC/T-333-SYNC).
+
+    Arbeitet bewusst DIREKT gegen den rohen store, nicht gegen
+    OwnerScopedStore: die normale Owner-Prüfung dort würde jeden Zugriff
+    auf einen fremden Eintrag blocken (auch für Admins) -- der
+    Besitzerwechsel selbst ist die eine, eng gefasste Ausnahme davon.
+    Berührt sonst nichts an OwnerScopedStore -- get()/update()/delete()
+    bleiben für alle anderen Operationen strikt owner-gescoped."""
+    from fastapi import APIRouter, HTTPException, Request
+    from fastapi.responses import HTMLResponse, RedirectResponse
+
+    router = APIRouter()
+
+    @router.get(f"/ui/{key}/{{item_id}}/reassign", response_class=HTMLResponse)
+    def reassign_dialog(item_id: str, request: Request):
+        require_admin()
+        from astrapi_core.system import auth as authmod
+        from astrapi_core.ui.render import render
+
+        item = store.get(item_id)
+        if item is None:
+            raise HTTPException(404, "Eintrag nicht gefunden")
+        users_options = [
+            {"value": u["id"], "label": u.get("display_name") or u["username"]}
+            for u in authmod.list_users()
+        ]
+        return render(
+            request,
+            dialog_template,
+            {"item_id": item_id, "item": item, "users_options": users_options},
+        )
+
+    @router.post(f"/ui/{key}/{{item_id}}/reassign", response_class=HTMLResponse)
+    async def reassign_apply(item_id: str, request: Request):
+        require_admin()
+        from astrapi_core.system import auth as authmod
+
+        item = store.get(item_id)
+        if item is None:
+            raise HTTPException(404, "Eintrag nicht gefunden")
+        form = await request.form()
+        try:
+            new_owner_id = int(form.get("owner_user_id", ""))
+        except (TypeError, ValueError):
+            raise HTTPException(400, "Ungültiger Nutzer")
+        if authmod.get_user(new_owner_id) is None:
+            raise HTTPException(400, "Ungültiger Nutzer")
+        store.update(item_id, {"owner_user_id": new_owner_id})
+        return RedirectResponse(f"/ui/{key}/content", status_code=303)
+
+    return router
+
+
 def make_owner_crud_api_router(key, schema_path, ui_store, *, can_delete_fn=None):
     """Ersatz für astrapi_core.ui.htmx_crud_router.make_htmx_crud_router()
     speziell für devices/folders: das Original arbeitet direkt gegen
