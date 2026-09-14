@@ -50,6 +50,7 @@ module = load_modul(
         columns=[
             Col.mono("id", "ID"),
             Col.category("category_name", "Kategorie", color_key="category_color", sortable=True),
+            Col.text("owner_display", "Besitzer", sortable=False),
         ],
         # Explizit statt der ContentTable-Defaults (beide sowieso True) --
         # frueher stand in crud.py's make_crud_router() has_run_buttons=False,
@@ -61,5 +62,13 @@ module = load_modul(
         # (T-226-SYNC).
         has_run_buttons=True,
         has_status=True,
+        # Dateien durchsuchen/Bearbeiten/Löschen nur für den eigenen Ordner,
+        # "Besitzer ändern" nur für Admins -- beides eigenbau statt der
+        # generischen Buttons, siehe folders/partials/row_actions.html
+        # (T-330-SYNC). Aus demselben Grund gewinnt has_edit/has_delete
+        # hier (ContentTable), nicht die gleichnamigen Parameter von
+        # make_crud_router() in ui/crud.py.
+        has_edit=False,
+        has_delete=False,
     ),
 )

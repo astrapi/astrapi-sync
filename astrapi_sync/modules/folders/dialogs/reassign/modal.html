@@ -1,0 +1,28 @@
+{#
+  folders/dialogs/reassign/modal.html
+  Besitzerwechsel eines Ordners (T-330-SYNC) -- admin-gated, siehe
+  ui/crud.py::_require_admin()/reassign_dialog()/reassign_apply(). Bewusst
+  ein eigener, schmaler Dialog statt eines Felds im normalen
+  Bearbeiten-Dialog: der wird generisch aus schema.yaml gebaut (kein
+  Owner-Feld dort), und Besitzerwechsel ist ohnehin eine seltene,
+  eigenständige Admin-Aktion, keine normale Ordner-Eigenschaft.
+#}
+{% extends "dialog_form.html" %}
+{% import 'partials/components/ui_macros.html' as ui %}
+
+{% block dialog_width %}400{% endblock %}
+{% block dialog_title %}Besitzer ändern – {{ folder.description or item_id }}{% endblock %}
+{% block form_method %}post{% endblock %}
+{% block form_action %}/ui/folders/{{ item_id }}/reassign{% endblock %}
+
+{% block dialog_body %}
+{% call ui.form_group('Besitzer') %}
+  {{ ui.form_select('owner_user_id', users_options, folder.owner_user_id | string, placeholder='') }}
+{% endcall %}
+<span class="form-help">
+  Der neue Besitzer sieht diesen Ordner künftig in seiner eigenen
+  Ordner-Liste und kann seinen Inhalt durchsuchen -- Administratoren
+  können den Besitzer ändern, aber nicht selbst auf fremde Ordnerinhalte
+  zugreifen.
+</span>
+{% endblock %}

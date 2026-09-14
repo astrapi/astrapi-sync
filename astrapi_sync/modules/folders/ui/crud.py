@@ -19,6 +19,7 @@ from pathlib import Path
 
 from astrapi_core.ui.crud_blueprint import make_crud_router
 from astrapi_core.ui.field_resolver import resolve_options_endpoint
+from astrapi_core.ui.render import render
 from astrapi_core.ui.store import SqliteTableStore
 from astrapi_sync.modules._owner_store import OwnerScopedStore, make_owner_crud_api_router
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -27,7 +28,10 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 KEY = "folders"
 _DIR = Path(__file__).parent.parent
 store = SqliteTableStore(KEY)
-ui_store = OwnerScopedStore(store)
+# admin_sees_all=True (T-330-SYNC): Admins sehen alle Ordner in der Liste,
+# um sie einem anderen Nutzer zuordnen zu koennen -- get()/update()/delete()
+# bleiben trotzdem strikt owner-gescoped, siehe _owner_store.py-Docstring.
+ui_store = OwnerScopedStore(store, admin_sees_all=True)
 
 
 def folders_for_select(enabled_only: bool = True, owner_user_id: int | None = None) -> list[dict]:
@@ -77,9 +81,21 @@ def _resolve_category(item_id: str, item: dict) -> dict:
     return item
 
 
+def _resolve_owner(item_id: str, item: dict) -> dict:
+    """Zeigt in der Liste, wem ein Ordner gehört -- v.a. für Admins relevant,
+    die dank admin_sees_all=True (siehe crud.py::ui_store) auch fremde
+    Ordner sehen (T-330-SYNC)."""
+    from astrapi_core.system import auth as authmod
+
+    user = authmod.get_user(item.get("owner_user_id"))
+    item["owner_display"] = (user.get("display_name") or user.get("username")) if user else "—"
+    return item
+
+
 def _resolve_list_display(item_id: str, item: dict) -> dict:
     item = _resolve_last_run(item_id, item)
     item = _resolve_category(item_id, item)
+    item = _resolve_owner(item_id, item)
     return item
 
 
@@ -160,6 +176,58 @@ async def create_with_check(request: Request):
     return RedirectResponse(f"/ui/{KEY}/content", status_code=303)
 
 
+def _require_admin() -> dict:
+    """Admin-Gate für den Besitzerwechsel (T-330-SYNC) -- bewusst NICHT
+    über ui_store/OwnerScopedStore, das würde entweder jeden blocken
+    (normale Owner-Prüfung) oder (falscher Ort) den generellen Zugriff auf
+    fremde Ordner öffnen. current_user kommt aus der Request-weiten
+    ContextVar (api/user_context.py), nicht aus dem Request-Objekt."""
+    from astrapi_sync.api.user_context import get_current_user
+
+    user = get_current_user()
+    if not user or not user.get("is_admin"):
+        raise HTTPException(403, "Nur Administratoren können den Besitzer ändern")
+    return user
+
+
+@router.get(f"/ui/{KEY}/{{item_id}}/reassign", response_class=HTMLResponse)
+def reassign_dialog(item_id: str, request: Request):
+    _require_admin()
+    from astrapi_core.system import auth as authmod
+
+    folder = store.get(item_id)  # roher Store -- Admin darf jeden Ordner sehen, siehe _owner_store.py
+    if folder is None:
+        raise HTTPException(404, "Ordner nicht gefunden")
+    users_options = [
+        {"value": u["id"], "label": u.get("display_name") or u["username"]}
+        for u in authmod.list_users()
+    ]
+    return render(
+        request,
+        f"{KEY}/dialogs/reassign/modal.html",
+        {"item_id": item_id, "folder": folder, "users_options": users_options},
+    )
+
+
+@router.post(f"/ui/{KEY}/{{item_id}}/reassign", response_class=HTMLResponse)
+async def reassign_apply(item_id: str, request: Request):
+    _require_admin()
+    from astrapi_core.system import auth as authmod
+
+    folder = store.get(item_id)
+    if folder is None:
+        raise HTTPException(404, "Ordner nicht gefunden")
+    form = await request.form()
+    try:
+        new_owner_id = int(form.get("owner_user_id", ""))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Ungültiger Nutzer")
+    if authmod.get_user(new_owner_id) is None:
+        raise HTTPException(400, "Ungültiger Nutzer")
+    store.update(item_id, {"owner_user_id": new_owner_id})
+    return RedirectResponse(f"/ui/{KEY}/content", status_code=303)
+
+
 # Generische CRUD-Routen danach (create wird durch die obige Route überschattet;
 # update/edit läuft jetzt komplett generisch, siehe Docstring oben)
 _crud = make_crud_router(
@@ -168,6 +236,7 @@ _crud = make_crud_router(
     schema_path=str(_DIR / "config" / "schema.yaml"),
     label="Ordner",
     has_toggle=False,
+    extra_actions_template=f"{KEY}/partials/row_actions.html",
     resolve_fields_fn=_resolve_fields,
     list_item_transform=_resolve_list_display,
     filters=[

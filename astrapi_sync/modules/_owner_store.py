@@ -5,16 +5,34 @@ filtert list()/get() auf den aktuell eingeloggten Web-Nutzer
 
 update()/delete() prüfen den Owner VOR der eigentlichen Operation (nicht
 nur die Anzeige) -- verhindert, dass jemand über eine erratene/bekannte
-fremde ID an fremden Daten schreibt, selbst wenn die UI sie nie zeigt."""
+fremde ID an fremden Daten schreibt, selbst wenn die UI sie nie zeigt.
+
+admin_sees_all (T-330-SYNC): opt-in, nur folders setzt es -- Admins duerfen
+dort ALLE Ordner in der Liste sehen (um sie ueberhaupt einem anderen Nutzer
+zuordnen zu koennen), aber get()/update()/delete()/toggle() bleiben
+UNVERAENDERT strikt owner-gescoped, auch fuer Admins. Der Besitzerwechsel
+selbst laeuft deshalb bewusst NICHT ueber diese Klasse, sondern direkt
+gegen den inneren Store (siehe folders/ui/crud.py::reassign_apply()) --
+Admins bekommen dadurch keinen generellen Lese-/Schreibzugriff auf fremde
+Ordnerinhalte (Dateibrowser bleibt ueber store.get() gesperrt), nur die
+Sichtbarkeit in der Liste und die eine, eng gefasste Besitzerwechsel-Aktion."""
 from astrapi_core.ui.store import SqliteTableStore
-from astrapi_sync.api.user_context import current_user_id
+from astrapi_sync.api.user_context import current_user_id, get_current_user
+
+
+def _current_user_is_admin() -> bool:
+    user = get_current_user()
+    return bool(user and user.get("is_admin"))
 
 
 class OwnerScopedStore:
-    def __init__(self, inner: SqliteTableStore) -> None:
+    def __init__(self, inner: SqliteTableStore, admin_sees_all: bool = False) -> None:
         self._inner = inner
+        self._admin_sees_all = admin_sees_all
 
     def list(self) -> dict[str, dict]:
+        if self._admin_sees_all and _current_user_is_admin():
+            return dict(self._inner.list())
         uid = current_user_id()
         return {k: v for k, v in self._inner.list().items() if v.get("owner_user_id") == uid}
 

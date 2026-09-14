@@ -1,0 +1,28 @@
+{#
+  folders/partials/row_actions.html
+  extra_actions_template für list_wrapper_inner.html (has_edit/has_delete
+  sind für dieses Modul aus, siehe __init__.py) -- Dateien durchsuchen/
+  Bearbeiten/Löschen nur für den eigenen Ordner, "Besitzer ändern" nur für
+  Admins (T-330-SYNC). Admins sehen dank admin_sees_all=True (crud.py)
+  auch fremde Ordner in der Liste, sollen deren Inhalt aber nicht
+  einsehen können -- deshalb hier die Owner-Prüfung statt allein auf
+  ui_store zu vertrauen (dessen get()/update() bleiben zwar ohnehin
+  gesperrt, aber ohne dieses Ausblenden würde ein Admin einen Button
+  sehen, der bei jedem Klick nur mit einem Fehler endet).
+#}
+{% import 'partials/components/ui_macros.html' as ui %}
+{% set _is_owner = current_user and item_data.owner_user_id == current_user.id %}
+{% if _is_owner %}
+<button type="button" class="btn-icon btn-icon-log" title="Dateien durchsuchen" aria-label="Dateien durchsuchen"
+        hx-get="/api/folders/{{ item_name }}/files" hx-target="body" hx-swap="beforeend">
+  {{ ui.icon("folder") }}
+</button>
+{{ ui.edit_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, page=_page) }}
+{{ ui.delete_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, description=item_data.description or item_name) }}
+{% endif %}
+{% if current_user and current_user.is_admin %}
+<button type="button" class="btn-icon" title="Besitzer ändern" aria-label="Besitzer ändern"
+        hx-get="/ui/folders/{{ item_name }}/reassign" hx-target="body" hx-swap="beforeend">
+  {{ ui.icon("users") }}
+</button>
+{% endif %}

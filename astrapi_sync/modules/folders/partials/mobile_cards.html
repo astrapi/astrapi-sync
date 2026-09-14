@@ -1,0 +1,49 @@
+{#
+  folders/partials/mobile_cards.html
+  Mobile-Karten für Ordner -- eigene Fassung statt des generischen
+  Fallbacks (T-330-SYNC), weil die Aktionen jetzt vom Besitz abhängen:
+  Dateien durchsuchen/Bearbeiten/Löschen nur für den eigenen Ordner,
+  "Besitzer ändern" nur für Admins (die dank admin_sees_all=True in
+  crud.py auch fremde Ordner sehen, aber nicht deren Inhalt). Kategorie-
+  Akzentstreifen + "Letzter Lauf immer sichtbar" wie im generischen
+  Fallback (mobile_cards_generic.html), hier dupliziert, weil dieses
+  Modul jetzt eigene Zeilen-Logik braucht.
+#}
+{% import 'partials/components/mobile_card_macros.html' as mc %}
+{% import 'partials/components/ui_macros.html' as ui %}
+
+{% if cfg %}
+  {% for item_name, item in cfg.items() %}
+    {%- set is_running = (module ~ ":" ~ item_name) in (running or {}) -%}
+    {%- set _status = 'running' if is_running else (last_run_status(module, item_name) if last_run_status is defined else none) or item.get('last_status') -%}
+    {%- set _is_owner = current_user and item.owner_user_id == current_user.id -%}
+    {% set _footer %}
+      {% if _is_owner %}
+      <button type="button" class="btn-icon btn-icon-log" title="Dateien durchsuchen" aria-label="Dateien durchsuchen"
+              hx-get="/api/folders/{{ item_name }}/files" hx-target="body" hx-swap="beforeend">
+        {{ ui.icon("folder") }}
+      </button>
+      {{ ui.edit_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, page=_page) }}
+      {{ ui.delete_button(module=module, item=item_name, container_id=container_id, loading_id=loading_id, description=item.description or item_name) }}
+      {% endif %}
+      {% if current_user and current_user.is_admin %}
+      <button type="button" class="btn-icon" title="Besitzer ändern" aria-label="Besitzer ändern"
+              hx-get="/ui/folders/{{ item_name }}/reassign" hx-target="body" hx-swap="beforeend">
+        {{ ui.icon("users") }}
+      </button>
+      {% endif %}
+    {% endset %}
+    {% call mc.m_card(item.description or item_name, status=_status, enabled=item.get('enabled', True), footer=_footer, accent=item.get('category_color')) %}
+      {{ mc.m_card_row('Letzter Lauf', ui.last_run_cell(item.get('last_run'))) }}
+      {% if current_user and current_user.is_admin %}
+        {{ mc.m_card_row('Besitzer', item.get('owner_display')) }}
+      {% endif %}
+    {% endcall %}
+  {% endfor %}
+{% else %}
+  <div class="empty-state">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" stroke="none"><use href="#icon-file-text"></use></svg>
+    <div class="empty-state-title">Keine Einträge vorhanden</div>
+    <div class="empty-state-sub">Erstelle den ersten Eintrag mit „Neu"</div>
+  </div>
+{% endif %}
