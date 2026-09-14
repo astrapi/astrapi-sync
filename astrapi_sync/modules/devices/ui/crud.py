@@ -13,7 +13,7 @@ from astrapi_sync.modules._owner_store import (
 KEY = "devices"
 _DIR = Path(__file__).parent.parent
 store = SqliteTableStore(KEY)
-# admin_sees_all=True (T-333-SYNC, analog zu folders/T-330-SYNC): Admins
+# admin_sees_all=True (T-331-SYNC, analog zu folders/T-330-SYNC): Admins
 # sehen alle Geräte in der Liste, um sie einem anderen Nutzer zuordnen zu
 # können (z.B. den ersten, noch auf "_default" laufenden Geräten). Anders
 # als bei Ordnern gibt es hier keine zusätzliche Zugriffsbeschränkung --
@@ -50,7 +50,7 @@ def _resolve_folder_labels(item_id: str, item: dict) -> dict:
 
 def _resolve_owner(item_id: str, item: dict) -> dict:
     """Zeigt in der Liste, wem ein Gerät gehört -- v.a. für Admins relevant,
-    die dank admin_sees_all=True auch fremde Geräte sehen (T-333-SYNC)."""
+    die dank admin_sees_all=True auch fremde Geräte sehen (T-331-SYNC)."""
     from astrapi_core.system import auth as authmod
 
     user = authmod.get_user(item.get("owner_user_id"))
@@ -84,7 +84,7 @@ router = make_crud_router(
     list_item_transform=_resolve_list_display,
 )
 
-# Besitzerwechsel (T-333-SYNC) -- gemeinsame, admin-only Routen/Logik für
+# Besitzerwechsel (T-331-SYNC) -- gemeinsame, admin-only Routen/Logik für
 # folders/devices, siehe _owner_store.py::make_reassign_owner_router().
 router.include_router(
     make_reassign_owner_router(KEY, store, f"{KEY}/dialogs/reassign/modal.html")

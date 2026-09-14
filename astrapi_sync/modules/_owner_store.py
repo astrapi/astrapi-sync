@@ -63,7 +63,7 @@ class OwnerScopedStore:
 
 def require_admin() -> dict:
     """Admin-Gate für Aktionen, die geräte-/ordnerübergreifend wirken
-    (aktuell nur der Besitzerwechsel, T-330-SYNC/T-333-SYNC). current_user
+    (aktuell nur der Besitzerwechsel, T-330-SYNC/T-331-SYNC). current_user
     kommt aus der Request-weiten ContextVar (api/user_context.py)."""
     from fastapi import HTTPException
 
@@ -75,7 +75,7 @@ def require_admin() -> dict:
 
 def make_reassign_owner_router(key: str, store: SqliteTableStore, dialog_template: str):
     """Admin-only 'Besitzer ändern'-Routen (GET Dialog, POST anwenden) für
-    ein owner-gescoptes Modul (folders/devices, T-330-SYNC/T-333-SYNC).
+    ein owner-gescoptes Modul (folders/devices, T-330-SYNC/T-331-SYNC).
 
     Arbeitet bewusst DIREKT gegen den rohen store, nicht gegen
     OwnerScopedStore: die normale Owner-Prüfung dort würde jeden Zugriff

@@ -53,7 +53,7 @@ module = load_modul(
         # bei einem fremden, nur dank admin_sees_all=True sichtbaren
         # Gerät sonst immer mit 404 fehlschlagen. Eigenbau statt der
         # generischen Buttons, siehe devices/partials/row_actions.html
-        # (T-333-SYNC).
+        # (T-331-SYNC).
         has_edit=False,
         has_delete=False,
     ),
