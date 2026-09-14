@@ -55,7 +55,7 @@ def folders_index():
     return HTMLResponse(
         _page(
             "Sync",
-            '<a href="/admin">Zum Dashboard →</a>',
+            "",
             rows,
             col_headers=("Name",),
             empty_message="Keine Ordner.",
